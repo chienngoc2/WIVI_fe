@@ -12,13 +12,13 @@ function App() {
   return (
     <BrowserRouter>
       {/* Full-width Layout Shell */}
-      <div className="w-full h-screen flex bg-[#FAFBFD] overflow-hidden relative">
+      <div className="w-full h-screen flex bg-canvas overflow-hidden relative">
         <Sidebar />
         
         <div className="flex-1 flex flex-col overflow-hidden">
           <TopNav />
           {/* Main Workspace Frame with 24px outer padding (p-6) */}
-          <main className="flex-1 overflow-y-auto bg-[#F8F9FA] p-6 scrollbar-premium">
+          <main className="flex-1 overflow-y-auto bg-canvas p-6 scrollbar-premium">
               <Routes>
                 <Route path="/" element={<Overview />} />
                 <Route path="/members" element={<Members />} />

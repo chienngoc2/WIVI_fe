@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { Megaphone, PaperPlaneTilt, ChatCircleText, BellSimple, Envelope, CheckCircle, Trash, PencilSimple, Plus, Sparkle } from '@phosphor-icons/react';
 
+type Channel = 'Push' | 'In-App' | 'Email';
+type TriggerType = 'risk_over' | 'goal_achieved' | 'app_churn';
+type RuleStatus = 'Hoạt động' | 'Tạm dừng';
+
 interface Campaign {
   id: string;
   name: string;
   audience: string;
-  channel: 'Push' | 'In-App' | 'Email';
+  channel: Channel;
   sentDate: string;
   openRate: string;
   conversionRate: string;
@@ -14,11 +18,17 @@ interface Campaign {
 
 interface AutoRule {
   id: string;
-  triggerType: 'risk_over' | 'goal_achieved' | 'app_churn';
-  channel: 'Push' | 'In-App' | 'Email';
+  triggerType: TriggerType;
+  channel: Channel;
   thresholds: number[];
   messageTemplate: string;
-  status: 'Hoạt động' | 'Tạm dừng';
+  status: RuleStatus;
+}
+
+interface ChannelOption {
+  value: Channel;
+  label: string;
+  icon: React.ReactNode;
 }
 
 const mockCampaigns: Campaign[] = [
@@ -36,12 +46,24 @@ const segments = [
   { name: 'Khách hàng doanh nghiệp', activeCampaigns: 3, openRate: '82%', clickRate: '38%', convRate: '15.6%' },
 ];
 
+const manualChannelOptions: ChannelOption[] = [
+  { value: 'Push', label: 'Cảnh báo Push', icon: <BellSimple size={14} /> },
+  { value: 'In-App', label: 'Bảng tin In-App', icon: <ChatCircleText size={14} /> },
+  { value: 'Email', label: 'Email Marketing', icon: <Envelope size={14} /> },
+];
+
+const autoChannelOptions: ChannelOption[] = [
+  { value: 'Push', label: 'Push Alert', icon: <BellSimple size={14} /> },
+  { value: 'In-App', label: 'In-App Feed', icon: <ChatCircleText size={14} /> },
+  { value: 'Email', label: 'Email Auto', icon: <Envelope size={14} /> },
+];
+
 export const Campaigns: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('manual');
   
   // Manual campaigns state
   const [campaigns, setCampaigns] = useState<Campaign[]>(mockCampaigns);
-  const [channel, setChannel] = useState<'Push' | 'In-App' | 'Email'>('Push');
+  const [channel, setChannel] = useState<Channel>('Push');
   const [campaignName, setCampaignName] = useState('');
   const [message, setMessage] = useState('');
   const [selectedSegments, setSelectedSegments] = useState<string[]>(['Người dùng Premium']);
@@ -54,11 +76,11 @@ export const Campaigns: React.FC = () => {
   ]);
 
   // Auto rule form state
-  const [ruleTrigger, setRuleTrigger] = useState<'risk_over' | 'goal_achieved' | 'app_churn'>('risk_over');
-  const [ruleChannel, setRuleChannel] = useState<'Push' | 'In-App' | 'Email'>('Push');
+  const [ruleTrigger, setRuleTrigger] = useState<TriggerType>('risk_over');
+  const [ruleChannel, setRuleChannel] = useState<Channel>('Push');
   const [ruleThresholdsText, setRuleThresholdsText] = useState('70, 85, 95');
   const [ruleTemplate, setRuleTemplate] = useState('');
-  const [ruleStatus, setRuleStatus] = useState<'Hoạt động' | 'Tạm dừng'>('Hoạt động');
+  const [ruleStatus, setRuleStatus] = useState<RuleStatus>('Hoạt động');
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
 
   const toggleSegment = (segName: string) => {
@@ -88,7 +110,7 @@ export const Campaigns: React.FC = () => {
     setMessage('');
   };
 
-  const getTriggerLabel = (type: 'risk_over' | 'goal_achieved' | 'app_churn') => {
+  const getTriggerLabel = (type: TriggerType) => {
     switch (type) {
       case 'risk_over': return 'Rủi ro vượt mức';
       case 'goal_achieved': return 'Hoàn thành mục tiêu';
@@ -253,15 +275,11 @@ export const Campaigns: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Kênh truyền tải thông điệp</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: 'Push', label: 'Cảnh báo Push', icon: <BellSimple size={14} /> },
-                    { value: 'In-App', label: 'Bảng tin In-App', icon: <ChatCircleText size={14} /> },
-                    { value: 'Email', label: 'Email Marketing', icon: <Envelope size={14} /> },
-                  ].map((item) => (
+                  {manualChannelOptions.map((item) => (
                     <button
                       key={item.value}
                       type="button"
-                      onClick={() => setChannel(item.value as any)}
+                      onClick={() => setChannel(item.value)}
                       className={`py-1.5 rounded-lg border text-[10px] font-medium flex flex-col items-center gap-1 transition-all ${
                         channel === item.value
                           ? 'bg-primary/5 text-primary border-primary/30 font-semibold shadow-premium-sm'
@@ -424,7 +442,7 @@ export const Campaigns: React.FC = () => {
                 <select
                   value={ruleTrigger}
                   onChange={(e) => {
-                    const newTrigger = e.target.value as any;
+                    const newTrigger = e.target.value as TriggerType;
                     setRuleTrigger(newTrigger);
                     if (newTrigger === 'risk_over') setRuleThresholdsText('70, 85, 95');
                     else if (newTrigger === 'goal_achieved') setRuleThresholdsText('50, 80, 100');
@@ -485,15 +503,11 @@ export const Campaigns: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Kênh gửi tự động</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: 'Push', label: 'Push Alert', icon: <BellSimple size={14} /> },
-                    { value: 'In-App', label: 'In-App Feed', icon: <ChatCircleText size={14} /> },
-                    { value: 'Email', label: 'Email Auto', icon: <Envelope size={14} /> },
-                  ].map((item) => (
+                  {autoChannelOptions.map((item) => (
                     <button
                       key={item.value}
                       type="button"
-                      onClick={() => setRuleChannel(item.value as any)}
+                      onClick={() => setRuleChannel(item.value)}
                       className={`py-1.5 rounded-lg border text-[10px] font-medium flex flex-col items-center gap-1 transition-all ${
                         ruleChannel === item.value
                           ? 'bg-primary/5 text-primary border-primary/30 font-semibold shadow-premium-sm'
@@ -528,7 +542,7 @@ export const Campaigns: React.FC = () => {
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Trạng thái áp dụng</label>
                 <select
                   value={ruleStatus}
-                  onChange={(e) => setRuleStatus(e.target.value as any)}
+                  onChange={(e) => setRuleStatus(e.target.value as RuleStatus)}
                   className="w-full bg-white border border-border-premium rounded-lg py-1 px-2 text-xs outline-none text-gray-700"
                 >
                   <option value="Hoạt động">Kích hoạt ngay (Hoạt động)</option>

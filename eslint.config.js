@@ -6,7 +6,9 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // `.kilo` chứa git worktree lồng nhau (`.kilo/worktrees/*`) với tsconfig.json riêng.
+  // Không ignore thì parser thấy nhiều candidate tsconfigRootDir và fail toàn bộ repo.
+  globalIgnores(['dist', '.kilo']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

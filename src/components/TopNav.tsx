@@ -1,7 +1,17 @@
 import React from 'react';
 import { MagnifyingGlass, Bell, Terminal } from '@phosphor-icons/react';
+import { useAuth } from '../hooks/useAuth';
 
 export const TopNav: React.FC = () => {
+  const { session } = useAuth();
+  const displayName = session?.identity.fullName || session?.identity.email || 'Quản trị viên';
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+
   return (
     <header className="h-14 bg-white border-b border-border-premium flex items-center justify-between px-6 z-10 select-none">
       {/* Search Input Box */}
@@ -37,11 +47,11 @@ export const TopNav: React.FC = () => {
         {/* Admin profile detail */}
         <div className="flex items-center gap-2.5">
           <div className="text-right">
-            <p className="text-xs font-semibold text-gray-900 leading-tight">Nicholas Gray</p>
-            <p className="text-[10px] text-gray-400 font-mono leading-none">Giám đốc Vận hành</p>
+            <p data-testid="topnav-identity-name" className="text-xs font-semibold text-gray-900 leading-tight">{displayName}</p>
+            <p className="text-[10px] text-gray-400 font-mono leading-none">Quản trị viên</p>
           </div>
-          <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-display text-xs font-bold text-primary shadow-inner">
-            NG
+          <div data-testid="topnav-identity-initials" className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-display text-xs font-bold text-primary shadow-inner">
+            {initials || 'AD'}
           </div>
         </div>
       </div>

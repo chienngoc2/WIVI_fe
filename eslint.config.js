@@ -8,7 +8,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   // `.kilo` chứa git worktree lồng nhau (`.kilo/worktrees/*`) với tsconfig.json riêng.
   // Không ignore thì parser thấy nhiều candidate tsconfigRootDir và fail toàn bộ repo.
-  globalIgnores(['dist', '.kilo']),
+  globalIgnores(['dist', '.kilo', 'test-results', 'playwright-report', 'blob-report', '.playwright']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

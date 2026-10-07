@@ -21,6 +21,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 2 : undefined,
+  // UI mode keeps traces across runs; isolate them from CLI output to prevent artifact races.
+  outputDir: process.argv.includes('--ui') ? './test-results-ui' : './test-results',
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: BASE_URL,

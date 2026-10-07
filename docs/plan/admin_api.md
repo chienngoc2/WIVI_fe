@@ -2,6 +2,8 @@
 
 **Trạng thái Stage 0:** Hoàn tất kiểm tra contract và thiết kế ngày 2026-10-05. Pencil MCP đã mở và đọc được `assets/admin_page_exe.pen`; không có thay đổi code. Repo có thay đổi chưa commit từ trước, được giữ nguyên.
 
+**Trạng thái triển khai Stage 2:** hoàn tất. `/members` đã bỏ mock và chạy bằng backend thật (`GET /admin/users`, `GET /admin/users/:id`, `PATCH /admin/users/:id/status`); search/status/pagination đều server-side và nằm trên URL search params. Đã chạy `pnpm lint`, `npx tsc -p tsconfig.app.json --noEmit`, `npx tsc -p tsconfig.node.json --noEmit`, `pnpm build` (pass; build còn cảnh báo bundle JS > 500 kB như trước). E2E mới trong `e2e/members/*`: **5 test `@real` chỉ đọc đã chạy pass** với backend thật + admin/user seed (list query params, debounce keyword, status filter, pagination, detail) và **6 test `@stub` đã chạy pass** (empty tự nhiên, rỗng-do-filter, error + retry, PATCH pending, PATCH 500 stale, detail lỗi). Riêng `TC-MEM-06 @real` (cấm → refetch → bỏ cấm account seed) chưa chạy trọn vẹn theo yêu cầu vì nó đổi trạng thái account trên DB dùng chung; chạy một phần đã đi hết nhánh cấm thành công. Chi tiết quyết định ở §"Stage 2 — Ghi chú triển khai".
+
 **Trạng thái triển khai:** Stage 1 hoàn tất ngày 2026-10-05. Frontend đã có API client, session/auth, đăng nhập Admin, route guard và trang 404. Bộ test Playwright UI cho luồng auth **đã chuyển sang chạy bằng dữ liệu thật** (2026-10-07): `test:e2e:real` gọi backend thật với account seed trong `.env.test`, `test:e2e:offline` giữ phần không cần backend cho CI, `live.spec.ts` đã xoá vì `TC-AUTH-20/21/22` phủ trực tiếp contract thật; AC-07 (refresh single-flight) vẫn treo chờ Stage 2 do chưa có request xác thực. `pnpm lint`, hai lệnh TypeScript check và `pnpm build` đều pass; build còn cảnh báo bundle JavaScript vượt 500 kB. Lưu ý: các trang admin (Members, Overview, Activity, Campaigns, Configuration) **vẫn dùng mock data trong page**, chưa gọi API — nên "dữ liệu thật" hiện chỉ đúng cho luồng auth.
 
 **Bằng chứng thiết kế:** kiểm tra trực tiếp các frame đăng nhập, Dashboard, Members và chi tiết/trạng thái thành viên, Activity, Broadcast list/compose/review, AI settings, Audit log, Categories và Subscription plans. Các màn mẫu vẫn là prototype; sự tồn tại trong `.pen` chứng minh flow/UI mục tiêu, không chứng minh dữ liệu hay hành vi đã nối backend.
@@ -186,24 +188,35 @@ Mở Members → request trang đầu → render data/pagination → đổi sear
 
 #### Tasks
 
-1. Khai báo DTO response; map `userName`, `status`, timestamps.
-2. Thay search/filter local bằng `keyword/status` server-side; debounce search.
-3. Xử lý `Active`/`Banned`; thay mapping `Suspended` sai contract.
-4. Kết nối paging; không giả lập total/page ở client.
-5. Nút Xem chỉ gọi detail khi flow detail đã có UI được xác nhận.
-6. Ban/unban dùng confirm và refetch; xử lý shape response khác nhau.
+1. [x] Khai báo DTO response; map `userName`, `status`, timestamps.
+2. [x] Thay search/filter local bằng `keyword/status` server-side; debounce search 350 ms.
+3. [x] Xử lý `Active`/`Banned`; thay mapping `Suspended` sai contract.
+4. [x] Kết nối paging; không giả lập total/page ở client.
+5. [x] Nút Xem gọi detail khi flow detail đã có UI được xác nhận.
+6. [x] Ban/unban dùng confirm và refetch; xử lý shape response khác nhau.
 
 #### Files affected
 
-- Sửa: `src/pages/Members.tsx`.
-- Mới: `src/services/adminUsers.ts`, thêm DTO vào `src/types/admin.ts`; có thể tái dùng `useAsync` nếu các page kế tiếp cần cùng lifecycle.
+- Sửa: `src/pages/Members.tsx`, `src/lib/api/client.ts` (nhận diện `AbortError` để bỏ qua response cũ), `src/types/admin.ts`.
+- Mới: `src/services/adminUsers.ts`, `src/lib/format.ts`, `src/components/ui/*` (Badge, Button, SectionCard, SearchInput, EmptyState, DataTable, Modal — theo đặc tả `DESIGN_SYSTEM.md` §8.5), `e2e/fixtures/members.ts`, `e2e/members/*.spec.ts`.
+
+#### Ghi chú triển khai (quyết định đã chốt khi code)
+
+> Đặc tả đầy đủ + test plan + sổ drift của stage này nằm ở [`../spec/members/README.md`](../spec/members/README.md).
+
+- **Không có API xoá user.** Đã kiểm tra `admin.controller.ts`: chỉ có `GET /admin/users`, `GET /admin/users/:id`, `PATCH /admin/users/:id/status`. Không có `DELETE`, không có soft-delete, và `AccountStatus` chỉ có `Active`/`Banned` (không có `Inactive`/`Disabled`). Vì vậy nút "Xoá" cũ được thay bằng "Cấm tài khoản"/"Bỏ cấm tài khoản" và chỉ gửi status đích tường minh.
+- **Không thêm filter role.** Runtime không trả và không lọc `role` trong `/admin/users` (đúng như §7 MISMATCH), UI Stage 2 cũng không có yêu cầu filter role. Giữ nguyên contract; bổ sung role vào response + query server-side là follow-up backend riêng nếu sản phẩm cần.
+- **Bỏ cột gói/quota/Sepay.** Không có admin API trả subscription, AI quota hay Sepay usage theo từng user (`TokenQuotaService` chỉ giữ usage trong memory, limit đọc từ env backend) ⇒ các cột này bị bỏ khỏi bảng, không map số mock thành dữ liệu thật.
+- **Không patch list từ response mutation.** `ban` trả `{id,username,firstName,lastName,email,phone,status,statusReason}`, `unban` trả `{id,username,status,statusReason}` — khác shape, nên sau PATCH luôn refetch list và detail đang mở.
+- **500 khi ban/unban = bản ghi đã cũ.** Handler ném `Error('Account not found')` ⇒ 500; FE đóng dialog, cảnh báo và refetch thay vì hiển thị lỗi thô.
+- **Clamp page.** Backend không clamp `pageIndex` theo `totalPages`; khi `pageIndex > totalPages`, FE chuyển URL về trang cuối rồi refetch.
 
 #### Acceptance Criteria
 
-- [ ] Paging/search/status lấy dữ liệu server.
-- [ ] Empty, loading, error và mutation states phân biệt được.
-- [ ] Filter plan không được hiển thị như filter backend nếu không có API hỗ trợ.
-- [ ] Banned/Active phản ánh đúng response.
+- [x] Paging/search/status lấy dữ liệu server.
+- [x] Empty, loading, error và mutation states phân biệt được.
+- [x] Filter plan không được hiển thị như filter backend nếu không có API hỗ trợ.
+- [x] Banned/Active phản ánh đúng response.
 
 ### Stage 3 — Broadcast thủ công
 
@@ -355,7 +368,7 @@ Mở Overview → GET dashboard → map summary → render các số thật và 
 
 ## 5. State Map
 
-State nên ở page cho filter/form/dialog; server response và loading/error theo request ở hook/page; session và identity ở AuthContext. Không cần store library. URL/query params chỉ cần cho search/filter/page nếu yêu cầu deep-link hoặc giữ trạng thái khi reload; hiện chưa có bằng chứng code đang dùng URL state.
+State nên ở page cho filter/form/dialog; server response và loading/error theo request ở hook/page; session và identity ở AuthContext. Không cần store library. URL/query params là source of truth cho `keyword`, `status`, `pageIndex`, `pageSize` của list (Stage 2 đã áp dụng cho `/members`); các page khác chưa dùng URL state.
 
 | Flow                             | State sau tích hợp                                                                                                                         |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -373,8 +386,8 @@ State nên ở page cho filter/form/dialog; server response và loading/error th
 | ----------------------------------- | -------------------------- | ------------------------------------------ | -------------------------------------------------------- | ---------------- |
 | `Overview.tsx` KPI                  | Hằng số local              | Admin dashboard                            | Nối summary, đánh dấu stubbed counters                   | Mismatch         |
 | `Overview.tsx` charts/lists         | Mảng dữ liệu cục bộ        | Không có time-series; list API hiện rỗng   | Không map giả; chờ capability/backend data               | Blocked/Mismatch |
-| `Members.tsx` users/search/status   | Hằng số và lọc client      | Users list/detail/status                   | Server query, normalize field/status/pagination          | Ready một phần   |
-| `Members.tsx` plan filter           | Giá trị local              | Không có subscription info trên users list | Không giữ như filter thật khi chưa có API                | Blocked          |
+| `Members.tsx` users/search/status   | Hằng số và lọc client      | Users list/detail/status                   | Server query, normalize field/status/pagination          | **Đã migrate (Stage 2)** |
+| `Members.tsx` plan filter           | Giá trị local              | Không có subscription info trên users list | Không giữ như filter thật khi chưa có API                | **Đã bỏ filter + cột gói/quota/Sepay (Stage 2)** |
 | `Activity.tsx` transactions/charts  | Mảng cục bộ                | Không thấy admin transactions API          | Cần backend endpoint phù hợp                             | Blocked          |
 | `Intelligence.tsx` risk/churn/chart | Mảng cục bộ                | Không có risk/churn admin API              | Cần backend capability hoặc quyết định bỏ flow           | Blocked          |
 | `Campaigns.tsx` manual/history      | Mảng + local form          | Admin broadcasts GET/POST                  | Nối list/create; giải quyết channel/audience             | Mismatch         |
@@ -414,7 +427,7 @@ State nên ở page cho filter/form/dialog; server response và loading/error th
 
 1. Stage 0 — **hoàn tất** kiểm chứng thiết kế và chốt các mặc định ghi ở trên.
 2. Stage 1 — **hoàn tất** API client/session/auth làm nền cho mọi request.
-3. Stage 2 — Users; đây là flow có API tương đối đầy đủ.
+3. Stage 2 — **hoàn tất**: Users là flow có API tương đối đầy đủ.
 4. Stage 3 — Broadcast thủ công với audience `All`; channel/segment chỉ bật sau khi backend có contract và consumer.
 5. Stage 4 — AI settings theo field contract thực.
 6. Stage 5 — Subscription plans sau khi làm rõ mô hình kỳ hạn và field update.

@@ -485,7 +485,7 @@ Số lượng test hiện tại: **49** (chromium-desktop 31 + chromium-mobile 1
 | Kích hoạt | Chạy ngay khi gọi lệnh | **Chỉ chạy khi bấm ▶** (hoặc bật Watch). Mở UI rồi click vào test chỉ hiện tab **Source** — chưa chạy thì chưa có trace |
 | Trace | Theo `playwright.config.ts` (`on-first-retry`) | UI **luôn ép** `{ mode: 'on', sources: false, live: true }` (`playwright@1.63.0/lib/runner/index.js:6821`) ⇒ mọi test đều có trace |
 | `retries` / `repeatEach` | Theo config (`CI ? 1 : 0`) | Ép `retries: 0`, `repeatEach: 1` |
-| Output dir | Xoá `test-results/` ở đầu mỗi run | `preserveOutputDir: true` ⇒ artifact **tích luỹ**, không xoá |
+| Output dir | CLI: `test-results/` (cleaned per run) | UI: `test-results-ui/` (preserved across runs) |
 | Phạm vi | Mặc định cả 2 project | Chỉ chạy tập con đang chọn (project/file/test) |
 
 ### 11.2 Pane snapshot hiện `about:blank` là bình thường
@@ -512,7 +512,7 @@ Kết luận: UI mode **có** ghi DOM snapshot; `about:blank` chỉ là action �
 
 ```bash
 # UI mode giữ artifact, nên mở lại trace của lần chạy trước:
-pnpm exec playwright show-trace "test-results/<tên-test>/trace.zip"
+pnpm exec playwright show-trace "test-results-ui/<tên-test>/trace.zip"
 
 # Hoặc tạo trace bằng CLI rồi mở (xem trước khi vào UI mode):
 pnpm exec playwright test --project=chromium-desktop --grep "TC-AUTH-03" --trace on

@@ -19,6 +19,16 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Lỗi huỷ request do caller chủ động abort (đổi filter/unmount) KHÔNG phải lỗi mạng.
+ * `fetch` ném `DOMException` tên `AbortError`, nhưng không phải engine nào cũng cho nó
+ * `instanceof Error`, nên phải nhận diện qua thuộc tính `name`.
+ */
+export const isAbortError = (error: unknown): boolean => {
+  if (typeof error !== 'object' || error === null) return false
+  return (error as { name?: unknown }).name === 'AbortError'
+}
+
 interface RequestOptions {
   authenticated?: boolean
   retryUnauthorized?: boolean
@@ -142,6 +152,9 @@ const send = async <T>(
     response = await fetch(`${apiRoot()}${path}`, { ...init, headers })
   } catch (error) {
     if (error instanceof ApiError) throw error
+    // Request bị abort chủ động: giữ nguyên lỗi abort để caller bỏ qua response cũ
+    // thay vì hiển thị error state cho một request đã bị thay thế.
+    if (isAbortError(error)) throw error
     throw new ApiError(0, {
       code: 'NETWORK_ERROR',
       message: 'Không thể kết nối máy chủ. Kiểm tra mạng rồi thử lại.',

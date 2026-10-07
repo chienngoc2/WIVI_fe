@@ -11,6 +11,7 @@ Thư mục này chứa ghi chú kỹ thuật **về chính repo này** (khác v�
 | [`typescript-strict.md`](./typescript-strict.md) | Trạng thái `strict` của TypeScript: vì sao cờ trong `tsconfig.json` gốc chưa có tác dụng, cách bật đúng, bằng chứng code đã pass |
 | [`plan/admin_api.md`](./plan/admin_api.md) | **Kế hoạch nối admin FE ↔ BE theo stage** (Stage 0 → Stage 6): inventory user-flow, API mapping, acceptance criteria từng stage, state map, migration matrix, blockers/mismatches |
 | [`spec/auth/`](./spec/auth/README.md) | **Spec + test plan cho Stage 1 (auth)** dưới dạng kiểm thử UI bằng Playwright: hợp đồng auth đã verify từ code, đặc tả UI từng màn, `AC-xx`, sổ drift `D-x`, câu hỏi `Q-x`, và catalogue test case `TC-AUTH-xx` |
+| [`spec/members/`](./spec/members/README.md) | **Spec + test plan cho Stage 2 (Members)** dưới dạng kiểm thử UI bằng Playwright: hợp đồng `/admin/users` đã verify từ code + runtime, đặc tả UI từng khối, `AC-MEM-xx`, sổ drift `D-MEM-x`, câu hỏi `Q-MEM-x`, và catalogue test case `TC-MEM-xx` (12 case, có kết quả chạy thật) |
 
 ## Tài liệu ở thư mục gốc repo (không thuộc `docs/`)
 

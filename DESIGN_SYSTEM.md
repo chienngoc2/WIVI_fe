@@ -1,5 +1,7 @@
 # Hợp đồng Design System WIVI — Mobile (`WVI/WIVI`) ⇄ Admin Web (`WIVI_fe`)
 
+> **Lưu ý hiện trạng 2026-10-07:** Các bảng đếm component, mô tả `src/components/ui/` “chưa có” và checklist tạo file trong tài liệu này là snapshot trước Stage 1–6. Source hiện có bảy primitive trong `src/components/ui/`; các phần còn lại là đặc tả thiết kế, không phải bằng chứng file đã tồn tại. Xem [`docs/struct/struct.md`](docs/struct/struct.md) và [`docs/plan/admin_api.md`](docs/plan/admin_api.md) để biết runtime/contract hiện tại.
+
 **Phiên bản 2 — viết lại từ đầu.** Mọi con số trong tài liệu này là **kết quả đếm thật** bằng ripgrep trên `WVI/WIVI/src/**/*.{ts,tsx}`, không phải ước lượng. Chỗ nào là suy luận/cần bạn xác nhận đều được ghi rõ.
 
 **Hai quyết định đã chốt (theo yêu cầu của bạn):**

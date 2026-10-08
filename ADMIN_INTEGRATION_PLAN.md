@@ -1,7 +1,9 @@
 # Admin Frontend ↔ Backend Integration Plan
 
-> **Status:** Analysis & planning only — no code implemented.
-> **Scope:** Synchronize the already-implemented Admin backend flows with the existing mock Admin frontend (`WIVI_fe`), one user flow at a time.
+> **Lưu ý cập nhật 2026-10-07:** Đây là bản khảo sát/kế hoạch **trước khi FE được triển khai**. Các câu bên dưới như “Zero integration today”, “all mock”, “Absent” và “no test runner” là snapshot lịch sử, không mô tả source hiện tại. Stage 1–2 đã có code/test; Stage 3–6 đã có code FE nhưng còn drift/lỗi được ghi ở [`docs/plan/admin_api.md`](docs/plan/admin_api.md). Dùng source và tài liệu đó để xác định mức hoàn thành hiện tại. Các bảng endpoint ở file này vẫn cần đối chiếu controller/handler backend khi sử dụng.
+
+> **Status at creation:** Pre-implementation analysis; FE implementation has since started. Current status: [`docs/plan/admin_api.md`](docs/plan/admin_api.md).
+> **Original scope:** Synchronize Admin backend flows with the then-mock Admin frontend (`WIVI_fe`), one user flow at a time.
 > **Method:** Documentation was read first, then **every** admin endpoint was verified against the actual backend source. Where docs and runtime differ, the runtime (code) is authoritative and the drift is recorded explicitly.
 > **Related:** `ADMIN_PORTAL_IMPLEMENTATION_BRIEF.md` (same repo) is the prior planning artifact; this plan re-verifies it against the code and **corrects** it where the code contradicts its assumptions.
 

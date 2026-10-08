@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   ArrowClockwise,
@@ -173,6 +173,7 @@ export const Members: React.FC = () => {
   const [listError, setListError] = useState<{ key: string; message: string } | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setKeywordInput(keyword);
   }, [keyword]);
 

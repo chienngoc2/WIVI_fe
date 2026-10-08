@@ -1,5 +1,7 @@
 # WIVI Admin Web (`WIVI_fe`) — Agent Coding Rules
 
+> **Cập nhật hiện trạng 2026-10-07:** §0 và những câu trong file này nói `src/services/`, `src/lib/`, auth, HTTP, test runner hoặc `src/components/ui/` “chưa tồn tại” là snapshot **trước Stage 1**. Các thư mục đó hiện đã có; Stage 3–6 còn lỗi/giới hạn được ghi tại [`docs/plan/admin_api.md`](docs/plan/admin_api.md). Quy tắc đặt code và bảo vệ contract ở các phần sau vẫn áp dụng; luôn kiểm tra source thực tế trước khi kết luận một file chưa có.
+
 > **Áp dụng cho:** mọi thay đổi trong `WIVI_fe/`.
 > **Thứ tự ưu tiên nguồn sự thật:** code đang chạy trong `src/` → `DESIGN_SYSTEM.md` → `ADMIN_INTEGRATION_PLAN.md` → `ADMIN_PORTAL_IMPLEMENTATION_BRIEF.md` → file này.
 > Khi tài liệu và code mâu thuẫn: **runtime thắng cho hành vi hiện tại**, tài liệu thắng cho **hợp đồng mục tiêu**; chênh lệch phải được ghi rõ trong PR, không được âm thầm chọn một bên.
@@ -7,9 +9,9 @@
 
 ---
 
-## 0. Tình trạng repo tại thời điểm viết rule (đọc trước khi tin tài liệu)
+## 0. Snapshot repo trước Stage 1 (chỉ để đối chiếu lịch sử)
 
-Đây là **hiện trạng đã kiểm chứng**. Nhiều tài liệu trong repo mô tả trạng thái *mục tiêu*, không phải trạng thái *hiện có*.
+Đây là **hiện trạng đã kiểm chứng tại thời điểm viết rule ban đầu**, trước khi triển khai Stage 1–6; **không còn là hiện trạng source**. Xem [`docs/struct/struct.md`](docs/struct/struct.md) và [`docs/graph.md`](docs/graph.md) cho cây và luồng đang có.
 
 | Hạng mục | Hiện trạng thật | Bằng chứng |
 | --- | --- | --- |
@@ -31,7 +33,7 @@
 | Code chết | `src/App.css` (158 dòng, **không được import**); `motion` + `tailwind-merge` trong `package.json` nhưng **0 chỗ dùng**; `src/assets/{hero.png,react.svg,vite.svg}`, `public/icons.svg` **0 chỗ dùng** | grep = 0 |
 | Baseline verify | `pnpm lint` = **pass (exit 0)**; `tsc -p tsconfig.app.json --noEmit` = **pass (0 lỗi)**; `tsc -p tsconfig.node.json --noEmit` = **pass** | đã chạy |
 
-**Hệ quả bắt buộc cho agent:** mọi hướng dẫn bên dưới nói "dùng `X`" hoặc "đặt vào `Y`" nhưng `X`/`Y` chưa tồn tại thì đó là **việc phải tạo trong task**, không phải thứ để import ngay. **Không được giả định** `src/lib/format.ts` hay `src/components/ui/*` đã có.
+**Hệ quả cho agent:** bảng §0 chỉ là snapshot lịch sử. Kiểm tra file thật bằng `rg --files src` trước khi import/tạo mới; `src/lib/format.ts` và bảy primitive trong `src/components/ui/` hiện đã tồn tại.
 
 ---
 
@@ -102,7 +104,7 @@ src/
 
 ### 1.3 Rule cứng về kiến trúc
 
-1. **Chỉ `src/services/*` + `src/lib/api/*` được chứa HTTP.** Page, component, hook không được gọi `fetch`/`axios`. *(BRIEF §9.4, §10.1; INTEGRATION_PLAN §7 "Ownership rules".)* Hiện tại điều này đúng một cách tầm thường vì **chưa có HTTP nào** — nhưng khi thêm, rule áp dụng ngay.
+1. **Chỉ `src/services/*` + `src/lib/api/*` được chứa HTTP.** Page, component, hook không được gọi `fetch`/`axios`. *(BRIEF §9.4, §10.1; INTEGRATION_PLAN §7 "Ownership rules".)* Hiện `src/lib/api/client.ts` gọi `fetch`, các service gọi `apiRequest`; giữ ranh giới này khi thêm flow.
 2. **Chỉ `src/lib/session.ts` được chạm `localStorage`.** Không rải `localStorage` trong page/service. *(BRIEF §10.4.)*
 3. **Không tạo design-token layer thứ hai.** `src/index.css` là nguồn token duy nhất. Không tạo `theme/colors.ts`, không `tailwind.config.js` mới. *(Hiện repo **không có** `tailwind.config.*` và **không có** `postcss.config.*` — Tailwind v4 chạy qua `@tailwindcss/vite`, cấu hình nằm trong CSS.)*
 4. **Không tạo API client thứ hai.** Nếu `src/lib/api/client.ts` đã tồn tại, service phải dùng nó; không viết `fetch` riêng trong service.
@@ -231,19 +233,19 @@ Mỗi page admin theo đúng thứ tự này (BRIEF §9.1):
 - Khai báo **tập trung** trong `src/App.tsx`. Không dùng route object rải rác.
 - Thêm route mới ⇒ **cập nhật `Sidebar.tsx` cùng lúc** (đồng bộ route ↔ nav).
 - `/` phải có `end` trên `NavLink` để không match mọi path con (`Sidebar.tsx:34` hiện **thiếu** `end` — sửa khi chạm file).
-- Cần thêm route `*` → `NotFound`. Hiện chưa có fallback.
+- Route `*` → `NotFound` hiện đã có bên trong Admin guard; giữ fallback khi đổi bảng route.
 - Route bảo vệ phải nằm trong guard; `/login` là route công khai duy nhất.
 
 ### 4.3 Layout & navigation
 
-- Shell hiện hard-code trong `App.tsx:15-31` cho mọi path. Khi thêm auth, tách thành `AppLayout` render **có điều kiện** cho route đã xác thực (BRIEF §9.1).
-- `Sidebar` nav items (`Sidebar.tsx:7-14`) hiện **không** có logic visibility → phải thêm gate theo role.
-- `TopNav` đang **hard-code identity** "Nicholas Gray" / "Giám đốc Vận hành" (`TopNav.tsx:40-41`) → phải thay bằng identity từ session. Search box (`TopNav.tsx:14-18`) và chuông (`TopNav.tsx:30-33`) **không có handler** → phải nối hoặc bỏ; không để affordance giả.
+- Shell hiện nằm trong `AppLayout` dưới `RequireAdmin`; `/login` ở ngoài shell.
+- `Sidebar` chỉ render bên trong Admin guard. Nếu sau này thêm nhiều role vào shell, phải gate nav theo role phù hợp.
+- `TopNav` đã lấy identity từ session. Search/ticker/chuông còn là affordance tĩnh; cần nối capability hoặc hiển thị rõ trạng thái chưa có chức năng.
 
 ### 4.4 Authentication & Authorization
 
 - Auth dùng chung `POST /api/v1/auth/login` với user thường — **không có** endpoint admin login riêng.
-- Gate theo role: `role.toLowerCase() === 'admin'` — **so sánh case-insensitive** vì `/auth/login` trả `'Admin'|'User'` còn `/auth/google` trả `'admin'|'user'` (INTEGRATION_PLAN §6.2 #7).
+- Gate hiện tại so sánh chính xác `role === 'Admin'` ở `App.tsx` và `AuthProvider.tsx`. Tài liệu cũ từng đề xuất case-insensitive; đó là drift `D-1`/`Q-1` trong [`docs/spec/auth/stage-1-auth-spec.md`](docs/spec/auth/stage-1-auth-spec.md), không được âm thầm đổi một phía.
 - Identity (id, fullName, email, role) **chỉ** đến từ response login và phải persist qua refresh + reload. **Không** rebuild từ `/user/me` (không có admin `/me`; `/user/me` là policy `User`) — BRIEF §10.4.
 - `401` → thử refresh **đúng một lần** (single-flight cho các 401 đồng thời) → retry → thất bại thì clear session + về `/login`. `403` → forbidden state, **không** logout, **không** retry loop. `User` login thành công nhưng không phải Admin → không render shell, báo "Tài khoản này không có quyền truy cập trang quản trị" + cho logout.
 - Guard ở frontend **chỉ là UX**. Backend (`JwtAuthGuard` + `RolesGuard`) mới là nguồn có thẩm quyền. Không gate thứ gì dựa vào giá trị client có thể giả.
@@ -340,9 +342,9 @@ Viết **một** normalizer ở `src/lib/api/normalize.ts` để hấp thụ 4 s
 | Local component state | UI tạm: mở/đóng dialog, draft form, row đang chọn | `useState` trong page/component | `Members.tsx:129-131`, `Activity.tsx:43-44`, `Campaigns.tsx:62-84` |
 | Derived state | Tính từ state/props khác | `useMemo` ngay tại chỗ dùng | `Members.tsx:134-145`, `Activity.tsx:47-62` |
 | Form state | Giá trị field + lỗi + pending của một form | Local state trong page, hoặc hook form cục bộ | `Campaigns.tsx:66-84`, `Configuration.tsx:5-29` |
-| Server state | Dữ liệu đến từ API | `src/hooks/useAsync.ts` (loading/error/data/refetch) — **không** cache library | (chưa tồn tại) |
-| URL / query state | page, pageSize, status, keyword, date filter của list | URL search params | (chưa tồn tại) |
-| Global state | **Chỉ** session/identity/role | `src/context/AuthContext.tsx` + `hooks/useAuth.ts` | (chưa tồn tại) |
+| Server state | Dữ liệu đến từ API | State trong page/hook; **không** cache library | `Members.tsx`, `Campaigns.tsx`, `Configuration.tsx`, `Overview.tsx`; `useAsync.ts` chưa có |
+| URL / query state | page, pageSize, status, keyword của list | URL search params khi cần deep link | `Members.tsx` đã dùng; `Campaigns.tsx` mới đọc URL lúc khởi tạo |
+| Global state | **Chỉ** session/identity/role | `src/context/AuthProvider.tsx` + `hooks/useAuth.ts` | Đã có |
 
 Rule quyết định:
 
@@ -638,5 +640,5 @@ Khi code và tài liệu lệch nhau, **báo cả hai phía** và nói rõ bên 
 - BRIEF §14 ghi 4 `as any` ở `Campaigns.tsx` — **hiện 0 chỗ**. Tài liệu lỗi thời.
 - BRIEF §8.5 nói categories nhận `isActive` — **runtime nhận `page/pageSize/keyword/includeDeleted`**. Code thắng.
 - `strict` TypeScript: **cờ đã được thêm vào `tsconfig.json` gốc nhưng chưa có hiệu lực** cho `src/`, vì file gốc là solution-style (`"files": []` + `references`). Code đã pass strict sạch khi test thật ⇒ chỉ cần thêm 2 dòng config. Chi tiết: [`docs/typescript-strict.md`](docs/typescript-strict.md).
-- Repo chưa có `src/lib/format.ts`, chưa có `src/components/ui/*` dù tài liệu mô tả như đã có.
+- Repo đã có `src/lib/format.ts` và bảy primitive trong `src/components/ui/`; xem [`docs/struct/struct.md`](docs/struct/struct.md) trước khi tạo component mới.
 - `README.md` là template Vite mặc định (2.453 bytes) — **không** chứa instruction dự án.

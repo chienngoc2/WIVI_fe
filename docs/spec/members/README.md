@@ -1,5 +1,7 @@
 # Spec — Admin Members (Stage 2)
 
+> **Phạm vi:** Bản này ghi code/test của Members. Stage 3–6 đã có code FE nhưng chưa có test UI riêng; trạng thái mới nhất của các stage đó ở [`../../plan/admin_api.md`](../../plan/admin_api.md).
+
 Thư mục này đặc tả **Stage 2 — Quản lý danh sách thành viên và trạng thái** của kế hoạch
 [`../../plan/admin_api.md`](../../plan/admin_api.md) (mục *Stage 2 — Quản lý danh sách thành viên và trạng thái*)
 dưới dạng **spec kiểm thử UI bằng Playwright**: mỗi yêu cầu phải diễn đạt được thành một kịch bản

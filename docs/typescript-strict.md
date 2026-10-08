@@ -1,6 +1,6 @@
 # TypeScript `strict` — trạng thái và cách bật đúng
 
-> **Ghi chú kỹ thuật cho `WIVI_fe`.** Viết ngày sau khi chủ repo thêm `"strict": true` vào `tsconfig.json`.
+> **Ghi chú kỹ thuật cho `WIVI_fe`.** Viết ngày sau khi chủ repo thêm `"strict": true` vào `tsconfig.json`. Đối chiếu lại ngày 2026-10-07: `npx tsc -p tsconfig.app.json --noEmit --strict` pass với source hiện tại, gồm code Stage 3–6; cấu hình `tsconfig.app.json` vẫn chưa bật `strict` mặc định.
 > **Kết luận ngắn:** code **đã sẵn sàng** cho `strict` (0 lỗi), nhưng cờ hiện tại **chưa được áp dụng** cho `src/`. Cần thêm 2 dòng ở 2 file khác.
 
 ---

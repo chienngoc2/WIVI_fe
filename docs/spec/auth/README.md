@@ -1,5 +1,7 @@
 # Spec — Admin Auth (Stage 1)
 
+> **Phạm vi lịch sử:** Tài liệu này ghi quyết định và test của Stage 1 tại thời điểm triển khai. Những câu nói các page nghiệp vụ đều mock hoặc chưa có service/UI primitive không còn mô tả source hiện tại; xem [`../../plan/admin_api.md`](../../plan/admin_api.md) và [`../../struct/struct.md`](../../struct/struct.md). Test auth hiện có không chứng minh Stage 3–6 đã đúng contract.
+
 Thư mục này đặc tả **Stage 1 — API client và đăng nhập Admin** của kế hoạch
 [`../../plan/admin_api.md`](../../plan/admin_api.md) (mục *Stage 1 — API client và đăng nhập Admin*)
 dưới dạng **spec kiểm thử UI bằng Playwright**: mỗi yêu cầu phải diễn đạt được thành một kịch bản

@@ -4,7 +4,9 @@
 
 **Trạng thái triển khai Stage 2:** hoàn tất. `/members` đã bỏ mock và chạy bằng backend thật (`GET /admin/users`, `GET /admin/users/:id`, `PATCH /admin/users/:id/status`); search/status/pagination đều server-side và nằm trên URL search params. Đã chạy `pnpm lint`, `npx tsc -p tsconfig.app.json --noEmit`, `npx tsc -p tsconfig.node.json --noEmit`, `pnpm build` (pass; build còn cảnh báo bundle JS > 500 kB như trước). E2E mới trong `e2e/members/*`: **5 test `@real` chỉ đọc đã chạy pass** với backend thật + admin/user seed (list query params, debounce keyword, status filter, pagination, detail) và **6 test `@stub` đã chạy pass** (empty tự nhiên, rỗng-do-filter, error + retry, PATCH pending, PATCH 500 stale, detail lỗi). Riêng `TC-MEM-06 @real` (cấm → refetch → bỏ cấm account seed) chưa chạy trọn vẹn theo yêu cầu vì nó đổi trạng thái account trên DB dùng chung; chạy một phần đã đi hết nhánh cấm thành công. Chi tiết quyết định ở §"Stage 2 — Ghi chú triển khai".
 
-**Trạng thái triển khai:** Stage 1 hoàn tất ngày 2026-10-05. Frontend đã có API client, session/auth, đăng nhập Admin, route guard và trang 404. Bộ test Playwright UI cho luồng auth **đã chuyển sang chạy bằng dữ liệu thật** (2026-10-07): `test:e2e:real` gọi backend thật với account seed trong `.env.test`, `test:e2e:offline` giữ phần không cần backend cho CI, `live.spec.ts` đã xoá vì `TC-AUTH-20/21/22` phủ trực tiếp contract thật; AC-07 (refresh single-flight) vẫn treo chờ Stage 2 do chưa có request xác thực. `pnpm lint`, hai lệnh TypeScript check và `pnpm build` đều pass; build còn cảnh báo bundle JavaScript vượt 500 kB. Lưu ý: các trang admin (Members, Overview, Activity, Campaigns, Configuration) **vẫn dùng mock data trong page**, chưa gọi API — nên "dữ liệu thật" hiện chỉ đúng cho luồng auth.
+**Trạng thái hiện tại (đối chiếu source ngày 2026-10-07):** Stage 1 và 2 đã có code cùng test Playwright; Stage 3–6 đã có code FE trong working tree nhưng **chưa đạt toàn bộ acceptance criteria** và chưa có test UI riêng. `/members`, `/campaigns` (broadcast thủ công), `/configuration` (AI settings, plans) và `/` (dashboard) đều đã gọi service API. `/activity` và `/intelligence` vẫn hiển thị dữ liệu mẫu. Chi tiết lỗi/giới hạn của Stage 3–6 nằm ở từng stage và §7. Các file source Stage 3–6 đang là thay đổi chưa commit; không xem tài liệu này là bằng chứng chúng đã được deploy.
+
+**Kiểm chứng:** `pnpm lint`, `npx tsc -p tsconfig.app.json --noEmit` và `npx tsc -p tsconfig.node.json --noEmit` pass khi review source ngày 2026-10-07. Bản tổng kết implement báo `pnpm build` pass nhưng lượt review docs này không xác minh lại build; các test `e2e/` hiện chỉ phủ auth và Members. Kết quả test Stage 1–2 trong tài liệu spec là kết quả lịch sử, không đại diện cho Stage 3–6.
 
 **Bằng chứng thiết kế:** kiểm tra trực tiếp các frame đăng nhập, Dashboard, Members và chi tiết/trạng thái thành viên, Activity, Broadcast list/compose/review, AI settings, Audit log, Categories và Subscription plans. Các màn mẫu vẫn là prototype; sự tồn tại trong `.pen` chứng minh flow/UI mục tiêu, không chứng minh dữ liệu hay hành vi đã nối backend.
 
@@ -16,7 +18,7 @@
 
 `WIVI_fe` là React/Vite/TypeScript. [App.tsx](F:/study/EXE/WIVI_fe/src/App.tsx) khai báo `/login` công khai, sáu route quản trị lồng trong Admin guard và route 404 nằm trong shell. [main.tsx](F:/study/EXE/WIVI_fe/src/main.tsx) bọc ứng dụng bằng `AuthProvider`; `AppLayout` sở hữu shell; [Sidebar.tsx](F:/study/EXE/WIVI_fe/src/components/Sidebar.tsx) chứa sáu mục điều hướng.
 
-`src/lib/api/client.ts` là HTTP client duy nhất; `src/services/auth.ts` gọi login/logout; `src/lib/session.ts` là nơi duy nhất chạm `localStorage`; `AuthContext` giữ phiên và danh tính. Các page nghiệp vụ còn lại vẫn dùng mock và chưa gọi API. `TopNav` lấy danh tính từ session; các thành phần tìm kiếm, vận hành và chuông vẫn là UI tĩnh.
+`src/lib/api/client.ts` là HTTP client dùng chung; `src/services/` chứa auth, users, broadcasts, AI settings, plans và dashboard; `src/lib/session.ts` là nơi duy nhất chạm `localStorage`; `AuthContext` giữ phiên và danh tính. Members gọi API thật. Campaigns, Configuration và Overview có request thật nhưng còn lỗi/giới hạn ở §4 và §7. Activity và Intelligence vẫn là trang dữ liệu mẫu. `TopNav` lấy danh tính từ session; search, ticker và chuông vẫn là UI tĩnh.
 
 ### Backend
 
@@ -32,32 +34,32 @@ Các API admin tương ứng một phần giao diện:
 
 Backend API và handler là nguồn để xác nhận contract; [ADMIN_INTEGRATION_PLAN.md](F:/study/EXE/WIVI_fe/ADMIN_INTEGRATION_PLAN.md) hữu ích làm bản đồ nhưng có nội dung kế hoạch chưa phải bằng chứng UI đã tồn tại.
 
-### Current Mock Architecture
+### Mock còn lại và ranh giới API
 
-Mock nghiệp vụ vẫn nằm trực tiếp trong page; filter, tìm kiếm và mutation chủ yếu cập nhật state tại chỗ hoặc gọi `alert()`/`confirm()`. Các tương tác nghiệp vụ đó chưa lưu lên backend. Auth là flow runtime thật, không dùng mock.
+Mock nghiệp vụ còn ở `Activity.tsx`, `Intelligence.tsx` và tab auto rules của `Campaigns.tsx`. Tab auto rules hiện vẫn cho tạo/sửa/xóa/bật tắt local, dù backend không có API. Các luồng auth, Members, broadcast thủ công, AI settings, plans và dashboard đã có lời gọi HTTP; có lời gọi HTTP **không đồng nghĩa** flow đã đúng contract hoặc đã được kiểm chứng end-to-end.
 
 > **Phân biệt hai loại mock** (dễ nhầm khi đọc trạng thái):
 >
 > | Loại | Vị trí | Trạng thái |
 > | --- | --- | --- |
-> | **Mock nghiệp vụ trong page** (dữ liệu giả của app) | `src/pages/*.tsx` | **Chưa xoá** — đây là nội dung §6 (Stage 2–6 mới migrate) |
-> | **Mock HTTP của e2e** (`page.route` giả `/api/v1/**`) | `e2e/fixtures/auth-backend.ts` | **Đã xoá 2026-10-07** — test chạy backend thật (`@real`), chỉ còn `@stub` cho nhánh backend không tạo được |
+> | **Mock nghiệp vụ trong page** (dữ liệu giả của app) | `Activity.tsx`, `Intelligence.tsx`, auto rules trong `Campaigns.tsx` | Vẫn tồn tại; không có admin API tương ứng |
+> | **Stub HTTP của e2e** (`page.route`) | `e2e/fixtures/` và các test `@stub` | Chỉ dùng để kiểm nhánh khó tạo với backend thật; không phải dữ liệu app |
 >
-> Stage 1 chỉ thêm **API auth thật** (`login`/`refresh`/`logout`). Các API admin thật (users, dashboard, categories, broadcasts, audit, plans, ai-settings) backend **đã có** nhưng app **chưa gọi**.
+> FE đã gọi users, dashboard, broadcasts, plans và AI settings. Categories và audit logs có API backend nhưng FE chưa nối.
 
-Các phần API/auth runtime hiện có là `src/lib/api/client.ts`, `src/lib/session.ts`, `src/services/auth.ts`, `src/types/admin.ts`, `src/context/AuthProvider.tsx`, `src/context/auth-context.ts` và `src/hooks/useAuth.ts`. Các thư mục UI primitives (`src/components/ui`) và service cho domain nghiệp vụ vẫn chưa được tạo; khi triển khai các stage sau, chỉ thêm phần thực sự dùng tới.
+Các phần nền gồm `src/lib/api/client.ts`, `src/lib/session.ts`, `src/lib/format.ts`, `src/types/admin.ts`, `src/context/`, `src/hooks/useAuth.ts` và các primitive trong `src/components/ui/`. Service nghiệp vụ đã có cho users, broadcasts, AI settings, plans và dashboard; chưa có `adminCategories.ts` và `adminAuditLogs.ts`.
 
 ## 2. Admin User-flow Inventory
 
 | ID    | Flow runtime hoặc mục tiêu trong thiết kế                      | FE evidence                                                                  | Backend API                                         | Trạng thái                                                                                                                                      |
 | ----- | ------------------------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| UF-01 | Mở trang Tổng quan và xem KPI, biểu đồ, danh sách             | `pages/Overview.tsx`; prototype có các frame dashboard trong `.pen`          | `GET /api/v1/admin/dashboard`                       | **Mismatch** — 6/9 counter là stub; `totalUsers` thực tế đếm account `Active`; hai danh sách rỗng và biểu đồ không có API tương ứng             |
-| UF-02 | Tìm/lọc thành viên, xem chi tiết, ban/bỏ ban                 | Page hiện tại có list mock; `.pen` có list/detail/confirm/success flows       | list, detail, status ở `/api/v1/admin/users`        | **Mismatch** — API list/detail/ban-unban có; filter gói không có dữ liệu và runtime UI `Suspended` không khớp backend `Banned`                 |
-| UF-03 | Xem nhật ký giao dịch, chuyển Spending/Subscription, tìm kiếm | `.pen` có Activity/Ledger và ghi rõ preview, dữ liệu mẫu, chưa có API admin  | Không có admin transaction-list API                 | **BLOCKED** — theo quyết định Stage 0, giữ route và hiện trạng thái chưa khả dụng; không trình bày dữ liệu mẫu như giao dịch thật                |
+| UF-01 | Mở trang Tổng quan và xem KPI, biểu đồ, danh sách             | `pages/Overview.tsx` đã gọi API; prototype có các frame dashboard trong `.pen` | `GET /api/v1/admin/dashboard`                     | **Đã nối FE, backend còn stub** — 3 counter có dữ liệu; `totalUsers` đếm account `Active`; 6 counter cố định `0`, hai danh sách cố định rỗng, không có API time-series |
+| UF-02 | Tìm/lọc thành viên, xem chi tiết, ban/bỏ ban                 | `pages/Members.tsx` đã dùng API; `.pen` có list/detail/confirm/success flows  | list, detail, status ở `/api/v1/admin/users`        | **Đã nối Stage 2** — server paging/search/status; filter gói và trạng thái `Suspended` đã bỏ; test mutation thật chưa chạy trọn vẹn |
+| UF-03 | Xem nhật ký giao dịch, chuyển Spending/Subscription, tìm kiếm | `.pen` có Activity/Ledger; `Activity.tsx` vẫn render giao dịch/chart mẫu      | Không có admin transaction-list API                 | **BLOCKED, FE chưa sửa đúng mục tiêu Stage 0** — route còn hiển thị dữ liệu mẫu như số liệu vận hành; cần trạng thái chưa khả dụng rõ ràng        |
 | UF-04 | Xem risk/churn và chỉ số hành vi AI                            | `.pen` có risk/churn lists và chart; runtime dùng dữ liệu mẫu               | Không có API admin cho risk/churn/time-series       | **BLOCKED** — không thay bằng AI settings API; các chỉ số trong prototype không có nguồn backend                                           |
-| UF-05 | Soạn, xem lại, lên lịch broadcast thủ công và xem lịch sử     | `.pen` có list/compose/review/queued; thiết kế có channel và segment presets  | `GET/POST /api/v1/admin/broadcasts`                 | **Mismatch** — API chỉ lưu title/body/audience/schedule; không có channel field hoặc bằng chứng consumer xử lý segment/dispatch                |
-| UF-06 | Tạo/sửa/xóa quy tắc gửi tự động                               | `.pen` đánh dấu automation chưa khả dụng; runtime có local mock              | Không có endpoint cho auto rules                    | **BLOCKED** — loại khỏi thao tác thật cho tới khi backend có capability                                                                        |
-| UF-07 | Chỉnh cấu hình AI và gói dịch vụ                              | Runtime có form AI/plan mock; `.pen` có AI settings và Subscription Plans    | AI settings, subscription plans                     | **Mismatch** — có API; cần ánh xạ field và các giới hạn response/update theo backend                                                            |
+| UF-05 | Soạn broadcast thủ công và xem lịch sử                       | `Campaigns.tsx` đã gọi GET/POST; không có UI lên lịch dù API nhận `scheduledAt` | `GET/POST /api/v1/admin/broadcasts`               | **Đã nối FE nhưng list lỗi contract** — service kỳ vọng `pagination` lồng; backend trả phẳng. POST chỉ tạo `Queued`; không có channel/segment hoặc bằng chứng đã phân phối |
+| UF-06 | Tạo/sửa/xóa quy tắc gửi tự động                               | Tab auto rules còn dữ liệu và thao tác local                                  | Không có endpoint cho auto rules                    | **BLOCKED** — UI ghi mock nhưng vẫn hiển thị số “Đang chạy” và cho thao tác; cần xử lý theo Stage 3 AC |
+| UF-07 | Chỉnh cấu hình AI và gói dịch vụ                              | `Configuration.tsx` đã gọi API cho cả hai panel                              | AI settings, subscription plans                     | **Đã nối FE, còn sai hành vi** — AI form submit thiếu `preventDefault`, ngưỡng rebalance không được gửi; plan update gửi field handler bỏ qua |
 | UF-08 | Xem/tạo/sửa/xóa danh mục hệ thống                              | `.pen` có Category List/Create/Edit/Delete trong Configuration             | Categories CRUD                                      | **Ready (design-backed)** — list hỗ trợ `page/pageSize/keyword/includeDeleted`, không có filter `isActive`                                   |
 | UF-09 | Xem và lọc nhật ký kiểm toán                                  | `.pen` có Audit Log read-only trong Intelligence                            | `GET /api/v1/admin/audit-logs`                       | **Mismatch (design-backed)** — API có; `adminUsername` response thực tế là actor UUID, không phải tên hiển thị                               |
 
@@ -71,12 +73,12 @@ Các phần API/auth runtime hiện có là `src/lib/api/client.ts`, `src/lib/se
 | Làm mới phiên            | `POST /api/v1/auth/refresh`, body `{refreshToken}`; response chỉ có hai token                                                                                                                    | Thêm refresh/retry một lần cho 401; identity không được cấp lại từ response refresh                                                                                               |
 | Dashboard                | `GET /api/v1/admin/dashboard`; `{summary, recentUsers, recentTransactions}`                                                                                                                      | `activeUsersLast30Days` và `bannedUsers` là số có nghĩa; `totalUsers` hiện đếm trạng thái `Active`, chỉ được hiển thị với nhãn đúng. Sáu counter 0, hai list rỗng và chart không được giả làm dữ liệu thật |
 | Danh sách thành viên     | `GET /api/v1/admin/users?pageIndex&pageSize&status&keyword`; response `{data,pagination}`                                                                                                        | Đổi sang server paging/search/status; chuẩn hóa `userName` và shape pagination. API hiện không lọc theo role, nên có thể trả admin accounts                                       |
-| Chi tiết thành viên      | `GET /api/v1/admin/users/:id`; object phẳng                                                                                                                                                      | `.pen` có màn chi tiết và confirm ban/bỏ ban; có bằng chứng UI để nối API, nhưng runtime page hiện chưa triển khai flow                                                          |
+| Chi tiết thành viên      | `GET /api/v1/admin/users/:id`; object phẳng                                                                                                                                                      | `Members.tsx` đã có modal chi tiết và gọi API; test đọc backend thật đã pass theo spec Stage 2                                                                                   |
 | Ban/bỏ ban               | `PATCH /api/v1/admin/users/:id/status`, body `{status,statusReason?}`                                                                                                                            | Chuẩn hóa response khác nhau giữa ban và unban; UI dùng `Banned`, không phải `Suspended`. Lỗi account không tồn tại hiện có thể thành 500                                         |
 | Gửi broadcast            | `POST /api/v1/admin/broadcasts`, `{title,body,targetAudience?,scheduledAt?}`; tạo broadcast trả 201, trạng thái Queued                                                                           | Ánh xạ campaign name → title, message → body. Channel không có field tương ứng; audience free-text không chứng minh hỗ trợ segment theo gói                                       |
-| Broadcast history        | `GET /api/v1/admin/broadcasts?pageIndex&pageSize&status`; response `{items,totalCount,page,pageSize,totalPages}`                                                                                 | Nối bảng lịch sử; chuẩn hóa pagination phẳng                                                                                                                                      |
+| Broadcast history        | `GET /api/v1/admin/broadcasts?pageIndex&pageSize&status`; handler trả `PaginatedResult` với field riêng `{items,totalCount,page,pageSize}` và getter `totalPages` | `adminBroadcasts.ts` hiện đọc sai `response.pagination`. Getter `totalPages` ở prototype có thể không được JSON serialize; cần kiểm response HTTP thật hoặc tính từ `totalCount/pageSize` |
 | Đọc/cập nhật AI settings | `GET/PATCH /api/v1/admin/ai-settings`; GET trả modelName, systemPrompt, temperature, maxTokens, isEnabled, rebalanceThresholdPercent…; PATCH còn nhận `apiKeyEncrypted` | `.pen` chỉ rõ không hiển thị khóa bí mật. UI không hiển thị/ghi API key; GET không có `apiKeyMasked`. Không gửi key từ FE nếu chưa có contract mã hóa và quyết định bảo mật rõ ràng |
-| Subscription plans       | `GET /api/v1/admin/subscriptions/plans` trả mảng raw, chỉ plan active; `POST` tạo plan; `PATCH /plans/:id` cập nhật một số field                                                                 | Form đang chia tier và nhiều chu kỳ giá; cần ánh xạ về `billingCycle`/plan thật. Backend update hiện không áp dụng `description` và `isPopular`; API list không trả plan inactive |
+| Subscription plans       | `GET /api/v1/admin/subscriptions/plans` trả mảng raw, chỉ plan active; `POST` tạo plan; `PATCH /plans/:id` cập nhật một số field                                                                 | FE đã thay tier mock bằng plan API; sửa plan vẫn gửi `description`/`isPopular` dù handler bỏ qua; plan inactive không hiện để kích hoạt lại                                       |
 | Giao dịch admin          | Không thấy endpoint list giao dịch phù hợp                                                                                                                                                       | Không thể nối `Activity` vào API người dùng cá nhân mà không có contract admin phù hợp                                                                                            |
 | Risk/churn/auto rules    | Không thấy admin endpoint phù hợp                                                                                                                                                                | Không thay bằng AI settings; đó là capability khác                                                                                                                                |
 
@@ -161,7 +163,7 @@ Admin nhập email/password → auth service gọi login → kiểm tra role →
 
 - [x] User không phải Admin không vào được route admin; role được so sánh chính xác với `Admin` theo quyết định Stage 0 và login runtime.
 - [x] API client tự gắn Bearer access token cho request xác thực.
-- [x] **Code có**: 401 thử refresh một lần, retry request tối đa một lần; refresh thất bại ⇒ xoá session và về đăng nhập. ⚠️ **Chưa kiểm chứng runtime** (`D-3`): Stage 1 chưa có request xác thực nào phát từ UI nên không tạo được 401 để chạy qua nhánh refresh — `TC-AUTH-41..43` chừa cho Stage 2 (test plan §7).
+- [x] **Code có**: 401 thử refresh một lần, retry request tối đa một lần; refresh thất bại ⇒ xoá session và về đăng nhập. ⚠️ **Chưa kiểm chứng qua UI**: Stage 2 đã có request xác thực nhưng test chưa kích hoạt nhánh refresh-on-401; xem `docs/spec/members/README.md` §6 và `G-MEM-5`.
 - [x] Token chỉ được đọc/ghi/xóa qua `src/lib/session.ts`, không lưu trong page/component.
 - [x] Logout luôn xoá session local kể cả khi API trả 401 (`TC-AUTH-51 @real`), và request logout gắn `Authorization: Bearer` (`TC-AUTH-52 @real`).
 - [ ] Nút logout trong shell portal — **chưa có**; hiện chỉ logout được từ banner `login-denied` ở `/login` (`src/pages/Login.tsx:92`). Design chưa xác nhận vị trí (task 5).
@@ -174,7 +176,7 @@ Thay mock list bằng truy vấn phân trang, tìm kiếm và trạng thái từ
 
 #### Existing FE
 
-`src/pages/Members.tsx`: bảng mock, search/filter local, filter plan, status, nút Xem và Xóa.
+Trước Stage 2: `Members.tsx` dùng bảng mock, search/filter local, filter plan và nút Xóa. Hiện đã thay bằng list/detail/status API như phần Tasks bên dưới.
 
 #### Backend API
 
@@ -226,7 +228,7 @@ Nối phần soạn broadcast và lịch sử với API hiện có. Giữ `targe
 
 #### Existing FE
 
-`src/pages/Campaigns.tsx`: tab thủ công/tự động, form gồm channel, tên, nội dung, segment; bảng log mock; auto rules local.
+Trước Stage 3: `Campaigns.tsx` có form channel/segment và bảng log mock. Hiện tab thủ công đã gọi GET/POST; tab auto rules vẫn có dữ liệu và thao tác local.
 
 #### Backend API
 
@@ -238,11 +240,11 @@ Mở Campaigns → lấy broadcast list → soạn nội dung → POST → nhậ
 
 #### Tasks
 
-1. Ánh xạ form field có tương ứng trực tiếp.
-2. Chỉ gửi `targetAudience: "All"`; không gửi channel hay segment vì backend hiện chỉ lưu chuỗi audience, không có consumer phân phối theo nhóm.
-3. Nối status/pagination của bảng lịch sử.
-4. Thêm submit/loading/error/success; refetch sau create.
-5. Giữ auto rules ở trạng thái BLOCKED cho tới khi có API.
+1. [x] Form thủ công map `campaignName → title`, `message → body`; POST với `scheduledAt: null` (UI chưa có lịch gửi).
+2. [x] Chỉ gửi `targetAudience: "All"`; không có channel/segment selector trong tab thủ công.
+3. [ ] Sửa `adminBroadcasts.ts`: handler trả phân trang **phẳng**, còn service đọc `response.pagination`. `totalPages` chỉ là getter của `PaginatedResult`, không phải field own; cần kiểm response HTTP thật trước khi đưa vào type hoặc tính từ `totalCount/pageSize`.
+4. [ ] Có loading/error/pending/success và refetch sau create trong source; cần test UI và backend sau khi sửa task 3. Thông báo chỉ nói tạo `Queued`, không nói đã gửi.
+5. [ ] Tab auto rules vẫn cho thêm/sửa/xóa/bật tắt local và ghi số “Đang chạy”; các nhãn mock chưa đáp ứng tiêu chí không trình bày rule như đã kích hoạt.
 
 #### Files affected
 
@@ -251,9 +253,9 @@ Mở Campaigns → lấy broadcast list → soạn nội dung → POST → nhậ
 
 #### Acceptance Criteria
 
-- [ ] Broadcast tạo mới hiển thị theo response backend và trạng thái Queued.
-- [ ] Không hiển thị auto rule như đã lưu hoặc đã kích hoạt.
-- [ ] Không có channel hoặc segment selector; `targetAudience` dùng mặc định `All` cho tới khi backend định nghĩa và thực thi targeting.
+- [ ] List và create chạy với response backend thật; tạo mới hiện `Queued` sau refetch. Chưa có test Stage 3 và list đang đọc sai envelope.
+- [ ] Auto rules không bị hiểu là đã lưu hoặc kích hoạt trên server; UI hiện vẫn có thao tác local và số “Đang chạy”.
+- [x] Tab thủ công không có channel/segment selector và POST gửi `targetAudience: "All"` (đối chiếu source; chưa test UI Stage 3).
 
 ### Stage 4 — Cấu hình AI
 
@@ -263,7 +265,7 @@ Mở Campaigns → lấy broadcast list → soạn nội dung → POST → nhậ
 
 #### Existing FE
 
-`src/pages/Configuration.tsx`: model type, learning rate, aggregation interval, auto suspend và các trường local.
+Trước Stage 4: `Configuration.tsx` dùng field AI local khác DTO backend. Hiện form đã dùng các field backend và gọi GET/PATCH.
 
 #### Backend API
 
@@ -275,11 +277,11 @@ Mở cấu hình AI → GET → điền form có field tương ứng → PATCH �
 
 #### Tasks
 
-1. Thay mock field bằng field backend thực sự có.
-2. Giữ nguyên các field chưa có mapping trong trạng thái chưa nối; không ánh xạ học-rate sang temperature nếu nghiệp vụ chưa xác nhận.
-3. Không thêm control nhập key: `.pen` không thiết kế control này, GET không trả masked key và FE chưa có contract để tạo `apiKeyEncrypted` hợp lệ.
-4. Xử lý GET 404 khi chưa có settings và trạng thái save.
-5. Tách phần subscription plan ra stage riêng.
+1. [x] Form đã thay field mock bằng `modelName`, `systemPrompt`, `temperature`, `maxTokens`, `isEnabled`, `rebalanceThresholdPercent`.
+2. [ ] `handleAiSave` được gắn vào `<form onSubmit>` nhưng không gọi `preventDefault()`; submit có thể tải lại trang trước khi request/refetch hoàn tất.
+3. [ ] `rebalanceThresholdPercent` cho nhập nhưng không nằm trong payload PATCH; backend DTO thực tế **cho phép** field này (`@Min(1)`, `@Max(100)`). Type FE hiện ghi sai rằng field không PATCH được.
+4. [x] Không có control nhập API key; GET không trả masked key. Source có nhánh GET 404 và gọi refetch sau PATCH, nhưng chưa có test UI Stage 4.
+5. [x] Panel plan dùng service riêng và được theo dõi ở Stage 5.
 
 #### Files affected
 
@@ -288,9 +290,9 @@ Mở cấu hình AI → GET → điền form có field tương ứng → PATCH �
 
 #### Acceptance Criteria
 
-- [ ] Các field gửi đi đúng DTO và validation backend.
-- [ ] Sau lưu, GET trả lại giá trị đã lưu.
-- [ ] Không hiển thị API key giả lập/masked nếu backend không trả.
+- [ ] Submit không reload trang; mọi field cho sửa phải được PATCH hoặc hiển thị read-only; giá trị được GET xác nhận sau lưu.
+- [ ] Validation form khớp DTO backend, gồm `temperature` 0–2, `maxTokens` 1–32768, `rebalanceThresholdPercent` 1–100.
+- [x] Không hiển thị API key giả lập/masked (đối chiếu source; chưa test UI Stage 4).
 
 ### Stage 5 — Subscription plans
 
@@ -300,7 +302,7 @@ Hiển thị và chỉnh sửa các plan theo model backend, không theo các gi
 
 #### Existing FE
 
-`Configuration.tsx`: ba tier, nhiều kỳ hạn và quota/SePay fields; hiện lưu local, nút chỉ alert.
+Trước Stage 5: `Configuration.tsx` có ba tier hard-code và nút alert. Hiện có bảng active plans từ GET và form create/edit.
 
 #### Backend API
 
@@ -314,10 +316,10 @@ Mở plan settings → GET active plans → render bảng → tạo hoặc sửa
 
 #### Tasks
 
-1. Thay form tier hard-code bằng dữ liệu plan.
-2. Chốt UX cho billingCycle, create và field chỉ đọc.
-3. Không kỳ vọng update description/isPopular có tác dụng trước khi backend hỗ trợ.
-4. Phân biệt active-only list với nhu cầu quản trị plan inactive.
+1. [x] Thay tier hard-code bằng `listPlans()`; form create gửi `code`, `name`, `price`, `billingCycle`, `features` cùng field tùy chọn.
+2. [x] Khi edit, `code` và `billingCycle` bị khóa; disable dùng PATCH `isActive: false`, không có DELETE.
+3. [ ] Form edit vẫn gửi `description` và `isPopular` rồi báo thành công; `SubscriptionService.updatePlan()` chỉ áp dụng `name`, `price`, `features`, `isActive`. Service FE cũng type response PATCH là plan trực tiếp, trong khi backend trả `{message,plan}`.
+4. [ ] List chỉ trả active plans; nút “Kích hoạt lại” trong row hiện không thể xuất hiện cho plan inactive. Cần quyết định UX hoặc backend API để quản trị inactive.
 
 #### Files affected
 
@@ -326,9 +328,9 @@ Mở plan settings → GET active plans → render bảng → tạo hoặc sửa
 
 #### Acceptance Criteria
 
-- [ ] List phản ánh đúng active plans backend trả về.
-- [ ] Không báo cập nhật thành công cho field backend bỏ qua.
-- [ ] Giá, kỳ hạn và features map đúng từng plan.
+- [ ] List/create/edit chạy với backend thật và được test; chưa có test Stage 5.
+- [ ] Không cho sửa hoặc báo lưu thành công đối với field backend bỏ qua (`description`, `isPopular` khi PATCH).
+- [ ] Giá, kỳ hạn và features map đúng từng plan; luồng plan inactive được chốt hoặc loại nút kích hoạt lại không tới được.
 
 ### Stage 6 — Dashboard có dữ liệu thật
 
@@ -338,7 +340,7 @@ Thay các mock KPI/list bằng dữ liệu dashboard nhưng trình bày trung th
 
 #### Existing FE
 
-`src/pages/Overview.tsx`: KPI, hai chart và ba danh sách mock.
+Trước Stage 6: `Overview.tsx` dùng KPI/chart/list mock. Hiện page gọi GET dashboard và hiển thị dữ liệu response.
 
 #### Backend API
 
@@ -350,10 +352,10 @@ Mở Overview → GET dashboard → map summary → render các số thật và 
 
 #### Tasks
 
-1. Thêm DTO dashboard và service.
-2. Phân biệt counter có dữ liệu với counter stub; dùng placeholder/nhãn phù hợp đã thống nhất.
-3. Hiển thị empty state cho hai list.
-4. Không gán dashboard response vào biểu đồ mock vì API không trả chuỗi thời gian.
+1. [x] Có DTO dashboard và `adminDashboard.ts`; page gọi `getAdminDashboard()`.
+2. [x] Với response backend hiện tại, ba counter có nghĩa được hiển thị; sáu counter cố định `0` hiện `—` và badge stub. Nếu backend đổi một field stub thành số khác 0, code hiện sẽ tự gắn nhãn “Dữ liệu thực” mà chưa có contract mới.
+3. [x] Hai list response rỗng được render bằng `EmptyState`; hai chart mock đã được thay bằng placeholder thiếu time-series.
+4. [ ] Thêm test UI Stage 6 cho loading/error, ba KPI thật, sáu stub và hai list rỗng; chưa có test tương ứng.
 
 #### Files affected
 
@@ -362,38 +364,38 @@ Mở Overview → GET dashboard → map summary → render các số thật và 
 
 #### Acceptance Criteria
 
-- [ ] Số có nguồn backend hiển thị đúng.
-- [ ] Counter stub không được trình bày như số liệu vận hành thật.
-- [ ] Không còn mock list/chart mang nhãn dữ liệu thực.
+- [ ] Ba số có nguồn backend hiển thị đúng với response thật (source đã map; chưa test UI Stage 6).
+- [ ] Sáu counter stub không bị trình bày như số đo vận hành; code đang dựa vào giá trị `0` để nhận diện stub.
+- [x] Source không còn chart/list mock trên Overview; chart có placeholder và list dùng response backend.
 
 ## 5. State Map
 
-State nên ở page cho filter/form/dialog; server response và loading/error theo request ở hook/page; session và identity ở AuthContext. Không cần store library. URL/query params là source of truth cho `keyword`, `status`, `pageIndex`, `pageSize` của list (Stage 2 đã áp dụng cho `/members`); các page khác chưa dùng URL state.
+State ở page cho filter/form/dialog và response/loading/error theo request; session và identity ở AuthContext. Không có store library. `/members` dùng URL search params làm source of truth cho `keyword`, `status`, `pageIndex`, `pageSize`. `/campaigns` đọc `pageIndex`, `pageSize`, `status` từ URL **chỉ lúc khởi tạo**, sau đó đổi state local mà không ghi lại URL; comment “URL-based” trong page chưa đúng hành vi.
 
 | Flow                             | State sau tích hợp                                                                                                                         |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Auth                             | `idle → submitting → success/Admin route`; nhánh sai role, credential lỗi, server error; refresh `retrying → success` hoặc session cleared |
 | Users                            | `idle → loading → success/empty`; refetch giữ dữ liệu cũ và báo busy; lỗi initial/refetch; mutation `confirm → pending → refetch` hoặc lỗi |
-| Broadcast                        | `loading → list/empty`; form local/validation; mutation pending → Queued + refetch hoặc lỗi                                                |
-| AI settings                      | loading → loaded; 404 “chưa cấu hình” nếu được xác định; form dirty là derived từ values; save pending → refetch hoặc lỗi                  |
-| Plans                            | loading → active plans/empty; form create/edit local; mutation pending → refetch hoặc lỗi                                                  |
-| Dashboard                        | loading → summary; empty recent lists; API error; không có mutation                                                                        |
-| Activity, risk/churn, auto rules | Không thể xác định success state từ API hiện có; giữ là BLOCKED                                                                            |
+| Broadcast                        | Có loading/list/empty/error và POST pending → thông báo `Queued` → refetch; GET hiện lỗi vì đọc sai envelope phẳng                         |
+| AI settings                      | Có loading/loaded/404/save/refetch; submit form thiếu `preventDefault` và ngưỡng rebalance được sửa nhưng không lưu                       |
+| Plans                            | Có loading/active plans/empty/create/edit/disable; update gửi field bị bỏ qua, inactive không hiện trong list                              |
+| Dashboard                        | Có loading/summary/error/refresh; hai list backend rỗng và chart placeholder; không có mutation                                           |
+| Activity, risk/churn, auto rules | Không có success state từ API admin; Activity/Intelligence vẫn là mock, auto rules còn thao tác local                                      |
 
 ## 6. Mock → Real API Migration Matrix
 
 | Mock source                         | Current use                | Real API                                   | Migration action                                         | Status           |
 | ----------------------------------- | -------------------------- | ------------------------------------------ | -------------------------------------------------------- | ---------------- |
-| `Overview.tsx` KPI                  | Hằng số local              | Admin dashboard                            | Nối summary, đánh dấu stubbed counters                   | Mismatch         |
-| `Overview.tsx` charts/lists         | Mảng dữ liệu cục bộ        | Không có time-series; list API hiện rỗng   | Không map giả; chờ capability/backend data               | Blocked/Mismatch |
-| `Members.tsx` users/search/status   | Hằng số và lọc client      | Users list/detail/status                   | Server query, normalize field/status/pagination          | **Đã migrate (Stage 2)** |
-| `Members.tsx` plan filter           | Giá trị local              | Không có subscription info trên users list | Không giữ như filter thật khi chưa có API                | **Đã bỏ filter + cột gói/quota/Sepay (Stage 2)** |
-| `Activity.tsx` transactions/charts  | Mảng cục bộ                | Không thấy admin transactions API          | Cần backend endpoint phù hợp                             | Blocked          |
-| `Intelligence.tsx` risk/churn/chart | Mảng cục bộ                | Không có risk/churn admin API              | Cần backend capability hoặc quyết định bỏ flow           | Blocked          |
-| `Campaigns.tsx` manual/history      | Mảng + local form          | Admin broadcasts GET/POST                  | Nối list/create; giải quyết channel/audience             | Mismatch         |
-| `Campaigns.tsx` auto rules          | State local, alert/confirm | Không có API                               | Không thể migrate                                        | Blocked          |
-| `Configuration.tsx` AI fields       | Local fields và alert      | Admin AI settings GET/PATCH                | Thay bằng contract backend                               | Mismatch         |
-| `Configuration.tsx` plan fields     | Local fields và alert      | Admin subscription plans GET/POST/PATCH    | Chuyển sang dữ liệu plan và chốt billing model           | Mismatch         |
+| `Overview.tsx` KPI                  | Đã gọi dashboard API       | Admin dashboard                            | 3 counter thật; 6 counter stub hiển thị `—`              | **Đã nối FE; chờ test UI/backend hoàn thiện** |
+| `Overview.tsx` charts/lists         | Chart placeholder; list từ response | Không có time-series; list API hiện rỗng | Chờ backend cấp dữ liệu                                  | **Đã bỏ mock FE; backend blocked** |
+| `Members.tsx` users/search/status   | Đã gọi API                | Users list/detail/status                   | Server query, normalize field/status/pagination          | **Đã migrate (Stage 2)** |
+| `Members.tsx` plan filter           | Đã bỏ                     | Không có subscription info trên users list | Không hiển thị filter/cột giả                            | **Đã bỏ (Stage 2)** |
+| `Activity.tsx` transactions/charts  | Vẫn render mock           | Không thấy admin transactions API          | Cần trạng thái chưa khả dụng hoặc backend endpoint       | **Blocked; mock còn hiển thị** |
+| `Intelligence.tsx` risk/churn/chart | Vẫn render mock           | Không có risk/churn admin API              | Cần capability backend hoặc loại dữ liệu giả             | **Blocked; mock còn hiển thị** |
+| `Campaigns.tsx` manual/history      | Đã gọi GET/POST            | Admin broadcasts GET/POST                  | Sửa map phân trang phẳng; test list/create               | **Đã nối FE; list lỗi contract** |
+| `Campaigns.tsx` auto rules          | State local, alert/confirm | Không có API                               | Ngăn hiểu nhầm là đang chạy/lưu trên server              | **Blocked; mock còn thao tác** |
+| `Configuration.tsx` AI fields       | Đã gọi GET/PATCH           | Admin AI settings GET/PATCH                | Sửa submit và field rebalance; test refetch              | **Đã nối FE; còn lỗi form** |
+| `Configuration.tsx` plan fields     | Đã gọi GET/POST/PATCH      | Admin subscription plans GET/POST/PATCH    | Không gửi field PATCH bị bỏ qua; xử lý inactive          | **Đã nối FE; còn mismatch** |
 | Categories (Configuration)         | `.pen` có list/create/edit/delete screens | Categories CRUD                    | Nối list/CRUD; map pagination/search; list không nhận `isActive` filter | Ready (design-backed) |
 | Audit logs (Intelligence)          | `.pen` có read-only list/filter screen | Audit GET                                 | Nối filters; `adminUsername` thực tế là actor UUID       | Mismatch (design-backed) |
 
@@ -406,16 +408,19 @@ State nên ở page cho filter/form/dialog; server response và loading/error th
 - **Risk/churn:** UI intelligence có dữ liệu mock; các endpoint AI hiện có không trả dữ liệu đó.
 - **Biểu đồ dashboard:** endpoint dashboard không trả chuỗi thời gian.
 - **Gửi broadcast tới audience:** API nhận và lưu chuỗi audience nhưng chưa thấy consumer fan-out; queued không chứng minh đã phát tin.
+- **Plan inactive:** API list chỉ trả active plans; nút kích hoạt lại trong danh sách hiện không thể dùng cho plan đã disable.
 
 ### MISMATCH
 
 - Dashboard trả sáu trường placeholder (`0`) và danh sách rỗng; `totalUsers` đang đếm account Active nên cần nhãn đúng hoặc backend sửa.
 - Users endpoint không lọc role, nên admin account cũng có thể xuất hiện.
-- UI dùng `Suspended`, API dùng `Banned`; filter gói trong UI không có nguồn dữ liệu.
+- Users UI hiện dùng `Banned` và đã bỏ filter gói; drift còn ở backend (list không lọc role, response và lỗi status khác docs).
 - Broadcast API không nhận channel; audience chỉ được lưu và event được phát, chưa thấy consumer phân phối theo segment.
+- `adminBroadcasts.ts` đọc `response.pagination` dù handler trả envelope phẳng; `totalPages` là getter có thể vắng trong JSON. Stage 3 GET chưa đúng contract.
 - AI settings UI mục tiêu `.pen` không hiển thị khóa; GET không trả key/masked key, PATCH runtime nhận `apiKeyEncrypted` nhưng FE chưa có cách tạo payload hợp lệ.
-- Plan API chỉ list active; một số field nhận ở update nhưng chưa được áp dụng.
-- UI báo gửi campaign thành công trong khi backend chỉ tạo broadcast Queued, không chứng minh đã gửi tới người nhận.
+- AI form submit thiếu `preventDefault`; ngưỡng `rebalanceThresholdPercent` có ô nhập nhưng không nằm trong payload PATCH dù backend DTO nhận field này.
+- Plan API chỉ list active; update nhận `description`/`isPopular` trong body nhưng handler bỏ qua. FE gửi hai field này, báo thành công, và type PATCH response sai shape `{message,plan}`.
+- Campaigns hiển thị kết quả tạo `Queued`, nhưng tab auto rules vẫn có nút bật/tắt và số “Đang chạy” cho dữ liệu local.
 
 ### NEEDS CLARIFICATION
 
@@ -428,9 +433,9 @@ State nên ở page cho filter/form/dialog; server response và loading/error th
 1. Stage 0 — **hoàn tất** kiểm chứng thiết kế và chốt các mặc định ghi ở trên.
 2. Stage 1 — **hoàn tất** API client/session/auth làm nền cho mọi request.
 3. Stage 2 — **hoàn tất**: Users là flow có API tương đối đầy đủ.
-4. Stage 3 — Broadcast thủ công với audience `All`; channel/segment chỉ bật sau khi backend có contract và consumer.
-5. Stage 4 — AI settings theo field contract thực.
-6. Stage 5 — Subscription plans sau khi làm rõ mô hình kỳ hạn và field update.
-7. Stage 6 — Dashboard sau khi thống nhất cách trình bày stub; có thể triển khai wiring trước, nhưng không coi dashboard hoàn tất nghiệp vụ cho tới khi backend trả dữ liệu đầy đủ.
+4. Stage 3 — **đã có code FE, chưa đạt**: sửa phân trang GET, xử lý auto rules local và thêm test UI/backend cho list/create.
+5. Stage 4 — **đã có code FE, chưa đạt**: sửa submit form và lưu ngưỡng rebalance; test GET 404, PATCH và refetch.
+6. Stage 5 — **đã có code FE, chưa đạt**: bỏ field PATCH bị backend bỏ qua, sửa type response, chốt UX inactive và test create/update.
+7. Stage 6 — **đã nối FE, backend còn stub**: test ba KPI thật, sáu placeholder, empty/error; dashboard đầy đủ cần backend bổ sung counter/list/time-series.
 
-Activity giữ route với trạng thái chưa khả dụng; risk/churn và auto rules chưa nối vì thiếu backend capability. Categories và Audit đã có thiết kế, cần được xếp thành stage trước khi triển khai. Stage 1 đã chạy `pnpm lint`, `npx tsc -p tsconfig.app.json --noEmit`, `npx tsc -p tsconfig.node.json --noEmit` và `pnpm build`; tất cả pass. Build phát cảnh báo bundle JS lớn hơn 500 kB. **Cập nhật 2026-10-07:** đăng nhập đã được xác nhận với backend runtime — suite `@real` (`pnpm run test:e2e:real`, 22 test) login thật và assert status thật (200/401/422) bằng account seed trong `.env.test`.
+Activity và Intelligence vẫn hiển thị mock; auto rules chưa có API và vẫn cho thao tác local. Categories và Audit đã có thiết kế/backend API nhưng chưa được xếp stage triển khai FE. Kết quả test auth/Members đã ghi ở `docs/spec/`; Stage 3–6 chưa có test tương ứng trong `e2e/`. Không dùng kết quả lint/typecheck/build để thay thế kiểm chứng contract hoặc thao tác UI.

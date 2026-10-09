@@ -340,7 +340,7 @@ Thay các mock KPI/list bằng dữ liệu dashboard nhưng trình bày trung th
 
 #### Existing FE
 
-Trước Stage 6: `Overview.tsx` dùng KPI/chart/list mock. Hiện page gọi GET dashboard và hiển thị dữ liệu response.
+Trước Stage 6: `Overview.tsx` dùng KPI/chart/list mock. Hiện page dùng bố cục chart-first: toolbar, biểu đồ cột trạng thái tài khoản, bảng thành viên và tóm tắt 70/30. Chi tiết contract, dependency còn thiếu và test: [`../spec/dashboard/redesign.md`](../spec/dashboard/redesign.md).
 
 #### Backend API
 
@@ -348,14 +348,14 @@ Trước Stage 6: `Overview.tsx` dùng KPI/chart/list mock. Hiện page gọi GE
 
 #### FE ↔ BE Flow
 
-Mở Overview → GET dashboard → map summary → render các số thật và empty list. Không diễn giải zero stub thành số đo thực tế.
+Mở Overview → GET dashboard để vẽ số tài khoản Active/Banned và tóm tắt active 30 ngày; GET users với `pageIndex=1&pageSize=8&keyword?&status?` để lấy tài khoản mới nhất. Search lọc danh sách; trạng thái lọc danh sách và biểu đồ. Không chuyển snapshot thành chuỗi thời gian.
 
 #### Tasks
 
 1. [x] Có DTO dashboard và `adminDashboard.ts`; page gọi `getAdminDashboard()`.
-2. [x] Với response backend hiện tại, ba counter có nghĩa được hiển thị; sáu counter cố định `0` hiện `—` và badge stub. Nếu backend đổi một field stub thành số khác 0, code hiện sẽ tự gắn nhãn “Dữ liệu thực” mà chưa có contract mới.
-3. [x] Hai list response rỗng được render bằng `EmptyState`; hai chart mock đã được thay bằng placeholder thiếu time-series.
-4. [ ] Thêm test UI Stage 6 cho loading/error, ba KPI thật, sáu stub và hai list rỗng; chưa có test tương ứng.
+2. [x] Ba counter có nghĩa được hiển thị; sáu counter chưa có query bị bỏ khỏi UI bất kể giá trị. Không hiển thị nhãn stub/diagnostic hoặc health giả.
+3. [x] Một biểu đồ trạng thái hiện tại thay hai placeholder; danh sách thành viên lấy từ users API đã có. Giao dịch rỗng trong dashboard được trình bày chưa khả dụng, không khẳng định không có giao dịch.
+4. [x] Test UI loading/error/retry, giá trị biểu đồ/tooltip, missing so với zero, search/status, menu và responsive 1440/820/390px tại `e2e/dashboard/overview.spec.ts`.
 
 #### Files affected
 
@@ -364,9 +364,9 @@ Mở Overview → GET dashboard → map summary → render các số thật và 
 
 #### Acceptance Criteria
 
-- [ ] Ba số có nguồn backend hiển thị đúng với response thật (source đã map; chưa test UI Stage 6).
-- [ ] Sáu counter stub không bị trình bày như số đo vận hành; code đang dựa vào giá trị `0` để nhận diện stub.
-- [x] Source không còn chart/list mock trên Overview; chart có placeholder và list dùng response backend.
+- [x] Ba số map đúng field runtime và được kiểm thử bằng response intercept; test live endpoint không thuộc lần redesign này.
+- [x] Sáu counter chưa triển khai bị bỏ khỏi dashboard, không suy luận availability từ giá trị `0`.
+- [x] Overview không tạo dữ liệu giả; số đo zero, chưa khả dụng, lỗi và danh sách rỗng có trạng thái riêng.
 
 ## 5. State Map
 
@@ -379,15 +379,15 @@ State ở page cho filter/form/dialog và response/loading/error theo request; s
 | Broadcast                        | Có loading/list/empty/error và POST pending → thông báo `Queued` → refetch; GET hiện lỗi vì đọc sai envelope phẳng                         |
 | AI settings                      | Có loading/loaded/404/save/refetch; submit form thiếu `preventDefault` và ngưỡng rebalance được sửa nhưng không lưu                       |
 | Plans                            | Có loading/active plans/empty/create/edit/disable; update gửi field bị bỏ qua, inactive không hiện trong list                              |
-| Dashboard                        | Có loading/summary/error/refresh; hai list backend rỗng và chart placeholder; không có mutation                                           |
+| Dashboard                        | Chart trạng thái, search/status, users API, tóm tắt 70/30; loading/empty/unavailable/error/retry độc lập; không có mutation |
 | Activity, risk/churn, auto rules | Không có success state từ API admin; Activity/Intelligence vẫn là mock, auto rules còn thao tác local                                      |
 
 ## 6. Mock → Real API Migration Matrix
 
 | Mock source                         | Current use                | Real API                                   | Migration action                                         | Status           |
 | ----------------------------------- | -------------------------- | ------------------------------------------ | -------------------------------------------------------- | ---------------- |
-| `Overview.tsx` KPI                  | Đã gọi dashboard API       | Admin dashboard                            | 3 counter thật; 6 counter stub hiển thị `—`              | **Đã nối FE; chờ test UI/backend hoàn thiện** |
-| `Overview.tsx` charts/lists         | Chart placeholder; list từ response | Không có time-series; list API hiện rỗng | Chờ backend cấp dữ liệu                                  | **Đã bỏ mock FE; backend blocked** |
+| `Overview.tsx` summary              | 3 counter thật trong panel | Admin dashboard                            | Bỏ 6 placeholder và diagnostics                          | **Đã có test UI; còn thiếu aggregate backend** |
+| `Overview.tsx` charts/lists         | Chart trạng thái + bảng thành viên | Dashboard snapshot + users API | Không dựng time-series; giao dịch rỗng chưa khả dụng       | **Đã có test UI; lịch sử/giao dịch chờ backend** |
 | `Members.tsx` users/search/status   | Đã gọi API                | Users list/detail/status                   | Server query, normalize field/status/pagination          | **Đã migrate (Stage 2)** |
 | `Members.tsx` plan filter           | Đã bỏ                     | Không có subscription info trên users list | Không hiển thị filter/cột giả                            | **Đã bỏ (Stage 2)** |
 | `Activity.tsx` transactions/charts  | Vẫn render mock           | Không thấy admin transactions API          | Cần trạng thái chưa khả dụng hoặc backend endpoint       | **Blocked; mock còn hiển thị** |

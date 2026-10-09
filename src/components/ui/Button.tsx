@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import type { ComponentPropsWithRef, ReactNode } from 'react'
 import clsx from 'clsx'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -16,7 +16,7 @@ const SIZES = {
 }
 
 export const Button = ({ variant = 'primary', size = 'sm', icon, className, children, ...rest }:
-  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: keyof typeof SIZES; icon?: ReactNode }) => (
+  ComponentPropsWithRef<'button'> & { variant?: Variant; size?: keyof typeof SIZES; icon?: ReactNode }) => (
   <button
     className={clsx(
       'inline-flex items-center justify-center gap-1.5 font-semibold transition-all duration-200',

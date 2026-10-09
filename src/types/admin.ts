@@ -5,6 +5,31 @@ export interface AdminIdentity {
   role: string
 }
 
+export type ReferralSource = 'facebook' | 'tiktok' | 'instagram' | 'friends' | 'other'
+export interface AdminFeedback {
+  id: string
+  userId: string
+  userName: string | null
+  email: string | null
+  rating: number
+  referralSource: ReferralSource
+  comment: string | null
+  createdAt: string
+}
+export interface AdminFeedbackListResponse {
+  items: AdminFeedback[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+export interface AdminFeedbackSummary {
+  totalSubmissions: number
+  totalVoters: number
+  averageRating: number | null
+  ratingDistribution: Array<{ rating: number; count: number }>
+  referralSources: Array<{ referralSource: ReferralSource; count: number }>
+}
+
 export interface LoginResponse {
   id: string
   username: string

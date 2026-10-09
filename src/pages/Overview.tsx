@@ -1,301 +1,157 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  Users,
-  Heartbeat,
-  ShieldCheck,
-  CurrencyDollar,
-  ArrowsLeftRight,
-  Cpu,
-  ArrowClockwise,
-  WarningCircle,
-  UserPlus,
-  TrendUp,
-  CloudArrowUp,
-} from '@phosphor-icons/react';
-import { SectionCard } from '../components/ui/SectionCard';
-import { Button } from '../components/ui/Button';
-import { EmptyState } from '../components/ui/EmptyState';
-import { Badge } from '../components/ui/Badge';
-import { isAbortError } from '../lib/api/client';
-import { formatDateTime } from '../lib/format';
-import { getAdminDashboard } from '../services/adminDashboard';
-import type { AdminDashboardResponse } from '../types/admin';
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowClockwise, ArrowsLeftRight, Funnel, Users, WarningCircle } from '@phosphor-icons/react'
+import { AccountStatusChart } from '../components/dashboard/AccountStatusChart'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { DataTable } from '../components/ui/DataTable'
+import { EmptyState } from '../components/ui/EmptyState'
+import { PanelMenu } from '../components/ui/PanelMenu'
+import { SearchInput } from '../components/ui/SearchInput'
+import { SectionCard } from '../components/ui/SectionCard'
+import { ApiError, isAbortError } from '../lib/api/client'
+import { formatDateTime, formatNumber, validCount } from '../lib/format'
+import { getAdminDashboard } from '../services/adminDashboard'
+import { listUsers } from '../services/adminUsers'
+import type { AdminDashboardResponse, AdminUsersListResponse, AdminUserStatus } from '../types/admin'
 
-const KPI_LABELS = [
-  { key: 'totalUsers', label: 'Tổng tài khoản Active', icon: <Users size={16} className="text-primary" /> },
-  { key: 'newUsersThisMonth', label: 'Tài khoản mới tháng này', icon: <UserPlus size={16} className="text-emerald-500" /> },
-  { key: 'activeUsersLast30Days', label: 'Active users 30 ngày', icon: <Heartbeat size={16} className="text-emerald-500" /> },
-  { key: 'bannedUsers', label: 'Tài khoản bị cấm', icon: <ShieldCheck size={16} className="text-danger" /> },
-  { key: 'totalTransactions', label: 'Tổng giao dịch', icon: <ArrowsLeftRight size={16} className="text-amber-500" /> },
-  { key: 'transactionsThisMonth', label: 'Giao dịch tháng này', icon: <CurrencyDollar size={16} className="text-success" /> },
-  { key: 'totalJars', label: 'Tổng hũ ngân sách', icon: <Cpu size={16} className="text-purple-500" /> },
-  { key: 'activeGoals', label: 'Mục tiêu đang hoạt động', icon: <TrendUp size={16} className="text-indigo-500" /> },
-  { key: 'pendingImportJobs', label: 'Import job chờ duyệt', icon: <CloudArrowUp size={16} className="text-info" /> },
-] as const;
+interface Snapshot<T> { key: string; data: T | null; error: string | null }
 
-type KpiKey = typeof KPI_LABELS[number]['key'];
+const loadError = (error: unknown, fallback: string): string =>
+  error instanceof ApiError && error.status === 403 ? 'Bạn không có quyền xem dữ liệu này.' : fallback
 
-export const Overview: React.FC = () => {
-  const [dashboard, setDashboard] = useState<AdminDashboardResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const loadDashboard = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true);
-    else setRefreshing(true);
-    setError(null);
-
-    try {
-      const data = await getAdminDashboard();
-      setDashboard(data);
-    } catch (err) {
-      if (isAbortError(err)) return;
-      setError(err instanceof Error ? err.message : 'Không tải được dashboard');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+export const Overview = () => {
+  const navigate = useNavigate()
+  const [keyword, setKeyword] = useState('')
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState<AdminUserStatus | 'all'>('all')
+  const [summaryRevision, setSummaryRevision] = useState(0)
+  const [usersRevision, setUsersRevision] = useState(0)
+  const [dashboard, setDashboard] = useState<Snapshot<AdminDashboardResponse> | null>(null)
+  const [users, setUsers] = useState<Snapshot<AdminUsersListResponse> | null>(null)
+  const summaryKey = String(summaryRevision)
+  const usersKey = JSON.stringify([search, status, usersRevision])
+  const currentDashboard = dashboard?.key === summaryKey ? dashboard : null
+  const currentUsers = users?.key === usersKey ? users : null
+  const summaryLoading = currentDashboard === null
+  const usersLoading = currentUsers === null
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadDashboard();
-  }, [loadDashboard]);
+    const timer = window.setTimeout(() => setSearch(keyword.trim()), 350)
+    return () => window.clearTimeout(timer)
+  }, [keyword])
 
-  const handleRetry = () => loadDashboard(false);
+  useEffect(() => {
+    const controller = new AbortController()
+    getAdminDashboard(controller.signal).then((data) => {
+      if (!controller.signal.aborted) setDashboard({ key: summaryKey, data, error: null })
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted && !isAbortError(error)) setDashboard({ key: summaryKey, data: null, error: loadError(error, 'Không tải được thống kê tài khoản') })
+    })
+    return () => controller.abort()
+  }, [summaryKey])
 
-  // Render helper: show "—" for stub zeros, real numbers for meaningful counters
-  const renderKpiValue = (key: KpiKey): string => {
-    if (!dashboard) return '—';
-    const value = dashboard!.summary[key];
-    // Backend hiện trả 0 cho các counter stub (totalTransactions, totalJars, activeGoals, pendingImportJobs)
-    // Chỉ hiển thị số cho 3 KPI có ý nghĩa: totalUsers, activeUsersLast30Days, bannedUsers
-    const meaningfulKeys: KpiKey[] = ['totalUsers', 'activeUsersLast30Days', 'bannedUsers'];
-    if (!meaningfulKeys.includes(key) && value === 0) return '—';
-    return value.toLocaleString('vi-VN');
-  };
+  useEffect(() => {
+    const controller = new AbortController()
+    listUsers({ pageIndex: 1, pageSize: 8, status: status === 'all' ? null : status, keyword: search || null, signal: controller.signal }).then((data) => {
+      if (!controller.signal.aborted) setUsers({ key: usersKey, data, error: null })
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted && !isAbortError(error)) setUsers({ key: usersKey, data: null, error: loadError(error, 'Không tải được danh sách thành viên') })
+    })
+    return () => controller.abort()
+  }, [search, status, usersKey])
 
-  const renderKpiNote = (key: KpiKey): string => {
-    if (!dashboard) return 'Đang tải…';
-    const value = dashboard!.summary[key];
-    const meaningfulKeys: KpiKey[] = ['totalUsers', 'activeUsersLast30Days', 'bannedUsers'];
-    if (!meaningfulKeys.includes(key) && value === 0) return 'Backend stub (chưa triển khai)';
-    return 'Dữ liệu thực từ backend';
-  };
-
-  if (loading) {
-    return (
-      <div className="h-full flex flex-col gap-5 max-w-7xl mx-auto select-none w-full text-xs">
-        <div className="flex justify-between items-center h-10 px-1">
-          <div>
-            <h1 className="text-xl font-bold font-display text-ink tracking-tight">Tổng Quan Hệ Thống WIVI</h1>
-            <p className="text-[11px] text-muted font-medium">Trạng thái hoạt động vận hành & phân tích số liệu tài chính thời gian thực.</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-          {KPI_LABELS.map((kpi, idx) => (
-            <div key={idx} className="bg-surface rounded-panel border border-border-premium shadow-premium-sm p-4 flex flex-col justify-between h-[95px]">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-muted-light uppercase tracking-wider">{kpi.label}</span>
-                <div className="w-6 h-6 rounded-md bg-surface-alt flex items-center justify-center border border-border-premium">{kpi.icon}</div>
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-base font-bold font-display text-ink leading-tight animate-pulse">—</span>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[250px]">
-          <SectionCard className="h-full" title="Tốc Độ Tăng Trưởng Thành Viên">
-            <div className="h-full flex items-center justify-center text-muted">Đang tải…</div>
-          </SectionCard>
-          <SectionCard className="h-full" title="Doanh Thu & Tỷ Lệ Chuyển Đổi">
-            <div className="h-full flex items-center justify-center text-muted">Đang tải…</div>
-          </SectionCard>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[200px]">
-          <SectionCard className="h-full" title="Thành Viên Tích Cực Nhất">
-            <div className="h-full flex items-center justify-center text-muted">Đang tải…</div>
-          </SectionCard>
-          <SectionCard className="h-full" title="Hoạt Động Gần Đây">
-            <div className="h-full flex items-center justify-center text-muted">Đang tải…</div>
-          </SectionCard>
-          <SectionCard className="h-full" title="Phân Khúc Người Dùng">
-            <div className="h-full flex items-center justify-center text-muted">Đang tải…</div>
-          </SectionCard>
-        </div>
-      </div>
-    );
+  const refreshSummary = () => setSummaryRevision((value) => value + 1)
+  const refreshUsers = () => setUsersRevision((value) => value + 1)
+  const resetFilters = () => { setKeyword(''); setSearch(''); setStatus('all') }
+  const openMembers = () => {
+    const params = new URLSearchParams()
+    if (search) params.set('keyword', search)
+    if (status !== 'all') params.set('status', status)
+    navigate(`/members${params.size ? `?${params}` : ''}`)
   }
-
-  if (error) {
-    return (
-      <div className="h-full flex flex-col gap-5 max-w-7xl mx-auto select-none w-full text-xs">
-        <div className="flex justify-between items-center h-10 px-1">
-          <div>
-            <h1 className="text-xl font-bold font-display text-ink tracking-tight">Tổng Quan Hệ Thống WIVI</h1>
-            <p className="text-[11px] text-muted font-medium">Trạng thái hoạt động vận hành & phân tích số liệu tài chính thời gian thực.</p>
-          </div>
-          <Button variant="primary" icon={<ArrowClockwise size={14} />} onClick={handleRetry}>
-            Thử lại
-          </Button>
-        </div>
-        <div role="alert" className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center bg-danger-soft border border-danger-soft-border rounded-panel">
-          <WarningCircle size={28} className="text-danger" />
-          <p className="text-xs font-semibold text-ink-soft">Không tải được dashboard</p>
-          <p className="text-[11px] text-muted-light max-w-sm">{error}</p>
-          <Button variant="primary" icon={<ArrowClockwise size={12} />} onClick={handleRetry}>
-            Thử lại
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // ---- Render Dashboard with real data ----
-  const recentUsers = dashboard!.recentUsers;
-  const recentTransactions = dashboard!.recentTransactions;
+  const summary = currentDashboard?.data?.summary ?? null
+  const transactions = currentDashboard?.data?.recentTransactions ?? []
+  const filtered = Boolean(search) || status !== 'all'
+  const summaryRows = [
+    { label: 'Tài khoản hoạt động', value: validCount(summary?.totalUsers) },
+    { label: 'Đăng nhập trong 30 ngày', value: validCount(summary?.activeUsersLast30Days) },
+    { label: 'Tài khoản bị cấm', value: validCount(summary?.bannedUsers) },
+  ]
 
   return (
-    <div className="h-full flex flex-col gap-5 max-w-7xl mx-auto select-none w-full text-xs">
-      {/* Title Header */}
-      <div className="flex justify-between items-center h-10 px-1">
-        <div>
-          <h1 className="text-xl font-bold font-display text-ink tracking-tight">Tổng Quan Hệ Thống WIVI</h1>
-          <p className="text-[11px] text-muted font-medium">Trạng thái hoạt động vận hành & phân tích số liệu tài chính thời gian thực.</p>
+    <div data-testid="overview-workspace" className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-4 pb-4 text-xs lg:gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-xl font-bold tracking-tight text-ink">Tổng quan hệ thống WIVI</h1>
+          <p className="mt-1 text-xs text-muted">Theo dõi tài khoản và hoạt động thành viên.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-success-soft/20 px-2.5 py-1 rounded-control border border-success-soft-border">
-            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span>
-            <span className="text-[10px] font-mono font-bold text-success uppercase tracking-wider">Hệ thống ổn định</span>
-          </div>
-          <Button variant="secondary" icon={<ArrowClockwise size={12} />} disabled={refreshing} onClick={() => loadDashboard(false)}>
-            {refreshing ? 'Đang làm mới…' : 'Làm mới'}
-          </Button>
+        <Button variant="secondary" icon={<ArrowClockwise size={14} />} disabled={summaryLoading || usersLoading}
+          onClick={() => { refreshSummary(); refreshUsers() }}>Làm mới</Button>
+      </div>
+
+      <div role="search" aria-label="Tìm kiếm và lọc thành viên" className="flex flex-wrap items-end gap-3">
+        <label className="w-full min-w-0 sm:w-2/5">
+          <span className="mb-1.5 block font-semibold text-ink-soft">Tìm thành viên</span>
+          <SearchInput value={keyword} onChange={setKeyword} placeholder="Tên, tài khoản hoặc email…" />
+        </label>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-none">
+          <label htmlFor="overview-status" className="flex items-center gap-1.5 font-semibold text-ink-soft"><Funnel size={13} />Trạng thái tài khoản</label>
+          <select id="overview-status" value={status} onChange={(event) => setStatus(event.target.value as AdminUserStatus | 'all')}
+            className="h-8 w-full rounded-control border border-hairline bg-surface px-3 text-xs text-ink outline-none focus:ring-2 focus:ring-primary-ring sm:w-48">
+            <option value="all">Tất cả trạng thái</option><option value="Active">Hoạt động</option><option value="Banned">Bị cấm</option>
+          </select>
         </div>
+        {(keyword || status !== 'all') && <Button variant="ghost" onClick={resetFilters}>Xóa bộ lọc</Button>}
       </div>
 
-      {/* KPI Cards Grid - 3 meaningful + 6 stub */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-        {KPI_LABELS.map((kpi, idx) => {
-          const value = renderKpiValue(kpi.key);
-          const isMeaningful = ['totalUsers', 'activeUsersLast30Days', 'bannedUsers'].includes(kpi.key);
-          const isStub = !isMeaningful && value === '—';
-          return (
-            <div
-              key={idx}
-              className={`bg-surface rounded-panel border border-border-premium shadow-premium-sm p-4 flex flex-col justify-between h-[95px] ${
-                isStub ? 'opacity-60' : ''
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-muted-light uppercase tracking-wider">{kpi.label}</span>
-                <div className="w-6 h-6 rounded-md bg-surface-alt flex items-center justify-center border border-border-premium">{kpi.icon}</div>
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-base font-bold font-display text-ink leading-tight">{value}</span>
-                <span className="text-[9px] font-medium text-muted font-mono">{renderKpiNote(kpi.key)}</span>
-              </div>
-              {isStub && (
-                <div className="mt-2 pt-2 border-t border-border-premium">
-                  <Badge tone="warning" className="text-[8px]">Stub (backend chưa tính)</Badge>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <SectionCard title="Phân bố trạng thái tài khoản" subtitle="Số lượng tại thời điểm cập nhật gần nhất" className="w-full min-w-0 [&_header_h3]:whitespace-normal" bodyClassName="min-w-0">
+        <AccountStatusChart summary={summary} status={status} loading={summaryLoading} error={currentDashboard?.error ?? null} onRetry={refreshSummary} />
+        <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-muted">Biểu đồ thể hiện trạng thái tài khoản hiện tại. Thống kê xu hướng theo thời gian chưa khả dụng.</p>
+      </SectionCard>
 
-      {/* Middle Grid - Charts (Placeholder - no time-series API) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[250px]">
-        <SectionCard className="h-full flex flex-col" title="Biểu đồ: Chưa có dữ liệu time-series">
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-muted p-4">
-              <WarningCircle size={24} className="mx-auto mb-2 text-warning" />
-              <p className="text-sm font-medium text-ink-soft">Backend không cung cấp API time-series</p>
-              <p className="text-[11px] text-muted-light">Dashboard hiện chỉ trả aggregate counters. Biểu đồ cần endpoint riêng.</p>
-            </div>
+      <div data-testid="overview-bottom-panels" className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:gap-6">
+        <SectionCard title={filtered ? 'Kết quả tìm kiếm thành viên' : 'Thành viên mới đăng ký'}
+          subtitle={currentUsers?.data ? `${formatNumber(currentUsers.data.pagination.totalCount)} thành viên${filtered ? ' phù hợp' : ' · tối đa 8 tài khoản mới nhất'}` : undefined}
+          className="min-w-0 [&_header_h3]:whitespace-normal" bodyClassName="min-w-0"
+          right={<PanelMenu label="Tùy chọn danh sách thành viên" actions={[
+            { label: 'Xem tất cả thành viên', onSelect: openMembers },
+            { label: 'Làm mới danh sách', onSelect: refreshUsers, disabled: usersLoading },
+          ]} />}>
+          {usersLoading ? <div role="status" className="py-12 text-center text-muted">Đang tải thành viên…</div>
+            : currentUsers?.error ? <div role="alert"><EmptyState icon={<WarningCircle size={18} />} title={currentUsers.error} action={<Button variant="secondary" onClick={refreshUsers}>Thử lại danh sách</Button>} /></div>
+            : <DataTable className="[&_table]:min-w-[560px]" rows={currentUsers?.data?.data ?? []} rowKey={(user) => user.id}
+              columns={[
+                { key: 'name', header: 'Thành viên', render: (user) => <div className="max-w-64 break-words"><p className="font-semibold text-ink">{`${user.firstName} ${user.lastName}`.trim() || user.userName}</p><p className="mt-1 text-[11px] text-muted">{user.email}</p></div> },
+                { key: 'status', header: 'Trạng thái', render: (user) => <Badge tone={user.status === 'Active' ? 'success' : 'danger'}>{user.status === 'Active' ? 'Hoạt động' : 'Bị cấm'}</Badge> },
+                { key: 'createdAt', header: 'Ngày đăng ký', render: (user) => <span className="whitespace-nowrap text-[11px] text-muted">{formatDateTime(user.createdAt)}</span> },
+              ]}
+              empty={<EmptyState colSpan={3} icon={<Users size={18} />} title={filtered ? 'Không tìm thấy thành viên phù hợp' : 'Chưa có thành viên nào'}
+                description={filtered ? 'Thử từ khóa khác hoặc xóa bộ lọc.' : 'Thành viên mới sẽ xuất hiện tại đây.'}
+                action={filtered ? <Button variant="secondary" onClick={resetFilters}>Xóa bộ lọc</Button> : undefined} />} />}
+        </SectionCard>
+
+        <SectionCard title="Tóm tắt tài khoản" subtitle="Toàn hệ thống" className="min-w-0 [&_header_h3]:whitespace-normal" right={<PanelMenu label="Tùy chọn tóm tắt tài khoản" actions={[
+          { label: 'Làm mới thống kê', onSelect: refreshSummary, disabled: summaryLoading },
+          { label: 'Quản lý thành viên', onSelect: () => navigate('/members') },
+        ]} />}>
+          {summaryLoading ? <div role="status" className="py-6 text-muted">Đang tải tóm tắt…</div>
+            : currentDashboard?.error ? <p className="text-xs text-muted">Tóm tắt tạm thời chưa khả dụng.</p>
+            : <dl className="divide-y divide-hairline">{summaryRows.map((row) => <div key={row.label} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-3 first:pt-0">
+              <dt className="text-xs text-muted">{row.label}</dt><dd className={`${row.value === null ? 'text-xs text-muted' : 'font-mono text-lg font-bold text-ink'} break-words`}>{formatNumber(row.value)}</dd>
+            </div>)}</dl>}
+          <div className="mt-4 border-t border-hairline pt-4">
+            <h2 className="mb-2 flex items-center gap-1.5 font-semibold text-ink-soft"><ArrowsLeftRight size={14} />Giao dịch gần đây</h2>
+            {summaryLoading ? <p className="text-[11px] text-muted">Đang tải…</p>
+              : currentDashboard?.error || transactions.length === 0 ? <p className="text-[11px] leading-relaxed text-muted">Thông tin giao dịch gần đây chưa khả dụng.</p>
+              : <ul className="space-y-3">{transactions.slice(0, 3).map((transaction) => <li key={transaction.id} className="min-w-0 break-words text-[11px]">
+                <p className="font-semibold text-ink-soft">{`${transaction.user.firstName} ${transaction.user.lastName}`.trim() || transaction.user.username}</p>
+                <p className="mt-1 text-muted">{transaction.type === 'Income' ? 'Thu' : transaction.type === 'Expense' ? 'Chi' : 'Giao dịch'} · {transaction.category.name} · {formatNumber(transaction.transactionsAmount)} đ</p>
+                <p className="mt-1 text-muted">{formatDateTime(transaction.transactionDate)}</p>
+              </li>)}</ul>}
           </div>
-        </SectionCard>
-
-        <SectionCard className="h-full flex flex-col" title="Biểu đồ: Chưa có dữ liệu time-series">
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-muted p-4">
-              <WarningCircle size={24} className="mx-auto mb-2 text-warning" />
-              <p className="text-sm font-medium text-ink-soft">Backend không cung cấp API time-series</p>
-              <p className="text-[11px] text-muted-light">Dashboard hiện chỉ trả aggregate counters. Biểu đồ cần endpoint riêng.</p>
-            </div>
-          </div>
-        </SectionCard>
-      </div>
-
-      {/* Bottom Grid - Recent Users & Recent Transactions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[300px]">
-        {/* Recent Users */}
-        <SectionCard className="h-full flex flex-col" title="Thành viên mới đăng ký" subtitle={`${recentUsers.length} bản ghi`}>
-          {recentUsers.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <EmptyState icon={<Users size={18} />} title="Chưa có thành viên mới" description="Backend trả về mảng rỗng." />
-            </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {recentUsers.map((user) => (
-                <div key={user.id} className="flex items-center justify-between py-2 border-b border-hairline last:border-0 group">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-pill bg-primary-soft border border-primary-soft-border flex items-center justify-center font-display font-bold text-xs text-primary shrink-0 overflow-hidden">
-                      {user.firstName?.charAt(0) ?? '?'}{user.lastName?.charAt(0) ?? ''}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-semibold text-ink truncate group-hover:text-primary transition-colors">
-                        {user.firstName} {user.lastName}
-                      </span>
-                      <span className="text-[10px] text-muted-light font-mono truncate">@{user.username} · {user.email}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge tone={user.status === 'Active' ? 'success' : 'danger'} dot className="text-[9px]">
-                      {user.status === 'Active' ? 'Hoạt động' : 'Bị cấm'}
-                    </Badge>
-                    <span className="text-[10px] text-muted font-mono">{formatDateTime(user.lastLoginAt)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
-        {/* Recent Transactions */}
-        <SectionCard className="h-full flex flex-col" title="Giao dịch gần đây" subtitle={`${recentTransactions.length} bản ghi`}>
-          {recentTransactions.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <EmptyState icon={<ArrowsLeftRight size={18} />} title="Chưa có giao dịch gần đây" description="Backend trả về mảng rỗng." />
-            </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {recentTransactions.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between py-2 border-b border-hairline last:border-0 group">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${tx.type === 'Income' ? 'bg-success' : 'bg-danger'}`} />
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-semibold text-ink truncate">{tx.user.firstName} {tx.user.lastName}</span>
-                      <span className="text-[10px] text-muted-light truncate">
-                        {tx.category.name} · {tx.financialAccount.name} ({tx.financialAccount.accountType})
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className={`font-mono font-bold text-[11px] ${tx.type === 'Income' ? 'text-success' : 'text-danger'}`}>
-                      {tx.type === 'Income' ? '+' : '-'}{tx.transactionsAmount.toLocaleString('vi-VN')} đ
-                    </span>
-                    <span className="text-[10px] text-muted font-mono">{formatDateTime(tx.transactionDate)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </SectionCard>
       </div>
     </div>
-  );
-};
+  )
+}

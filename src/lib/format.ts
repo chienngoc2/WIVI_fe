@@ -13,6 +13,15 @@ const dateTimeFormatter = new Intl.DateTimeFormat('vi-VN', {
   hour12: false,
 })
 
+const numberFormatter = new Intl.NumberFormat('vi-VN')
+
+/** Missing measurements stay distinct from a measured zero. */
+export const formatNumber = (value: number | null | undefined): string =>
+  typeof value === 'number' && Number.isFinite(value) ? numberFormatter.format(value) : 'Chưa có dữ liệu'
+
+export const validCount = (value: number | null | undefined): number | null =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null
+
 /**
  * Backend trả ISO-8601 UTC; hiển thị theo `Asia/Ho_Chi_Minh`.
  * `null`/`undefined`/chuỗi không parse được ⇒ `—` (không render `null`/`Invalid Date`).

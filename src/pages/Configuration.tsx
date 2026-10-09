@@ -424,7 +424,7 @@ export const Configuration: React.FC = () => {
         </SectionCard>
 
         {/* STAGE 5: SUBSCRIPTION PLANS */}
-        <SectionCard className="h-[550px] flex flex-col" title="Gói đăng ký (Subscription Plans)" subtitle={plansLoading ? 'Đang tải…' : `${plans.length} gói`}>
+        <SectionCard className="h-[550px] flex flex-col" bodyClassName="flex-1 flex flex-col overflow-hidden" title="Gói đăng ký (Subscription Plans)" subtitle={plansLoading ? 'Đang tải…' : `${plans.length} gói`}>
           {plansError && (
             <div role="alert" className="shrink-0 px-4 py-2 border-b border-danger-soft-border bg-danger-soft flex items-center justify-between gap-3 mb-4">
               <span className="text-[11px] font-medium text-danger-deep">{plansError}</span>
@@ -446,7 +446,7 @@ export const Configuration: React.FC = () => {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-premium space-y-3 pr-1">
             {/* Plans Table */}
             <DataTable
               columns={[
@@ -562,7 +562,7 @@ export const Configuration: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 {/* Code - chỉ hiển thị khi tạo mới, read-only khi edit */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-light uppercase tracking-wider">Mã gói (code) {editingPlanId ? '(không đổi được)' : '<span className="text-danger">*</span>'}</label>
+                  <label className="text-[10px] font-bold text-muted-light uppercase tracking-wider">Mã gói (code) {editingPlanId ? '(không đổi được)' : <span className="text-danger">*</span>}</label>
                   <input
                     type="text"
                     placeholder="Ví dụ: plan_pro_monthly"
@@ -576,7 +576,7 @@ export const Configuration: React.FC = () => {
 
                 {/* Billing Cycle - chỉ hiển thị khi tạo mới, read-only khi edit */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-light uppercase tracking-wider">Kỳ thanh toán {editingPlanId ? '(không đổi được)' : '<span className="text-danger">*</span>'}</label>
+                  <label className="text-[10px] font-bold text-muted-light uppercase tracking-wider">Kỳ thanh toán {editingPlanId ? '(không đổi được)' : <span className="text-danger">*</span>}</label>
                   <select
                     value={planForm.billingCycle}
                     onChange={(e) => setPlanForm((prev) => ({ ...prev, billingCycle: e.target.value as BillingCycle }))}

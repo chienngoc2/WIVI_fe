@@ -10,6 +10,7 @@ import { Intelligence } from './pages/Intelligence';
 import { Campaigns } from './pages/Campaigns';
 import { Configuration } from './pages/Configuration';
 import { Feedbacks } from './pages/Feedbacks';
+import { Profile } from './pages/Profile';
 
 const RequireAdmin = () => {
   const { session } = useAuth();
@@ -40,6 +41,7 @@ function App() {
             <Route path="/intelligence" element={<Intelligence />} />
             <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/configuration" element={<Configuration />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Route>

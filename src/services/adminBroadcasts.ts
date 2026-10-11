@@ -1,14 +1,13 @@
 import { apiRequest } from '../lib/api/client'
 import type {
-  AdminBroadcast,
   AdminBroadcastsListResponse,
-  BroadcastsPagination,
+  AdminBroadcastsRawListResponse,
   CreateBroadcastRequest,
   CreateBroadcastResponse,
 } from '../types/admin'
 
 export interface ListBroadcastsParams {
-  /** Backend nhận `pageIndex` và `pageSize`; shape response là phẳng (page, pageSize, totalCount, totalPages) */
+  /** Request gửi `pageIndex` và `pageSize`; response phẳng trả `page`, không có `totalPages`. */
   pageIndex: number
   pageSize: number
   /** `null` = tất cả trạng thái; bỏ hẳn param thay vì gửi chuỗi rỗng */
@@ -29,18 +28,14 @@ export const listBroadcasts = ({
   params.set('pageSize', String(pageSize))
   if (status) params.set('status', status)
 
-  // Backend trả về envelope phẳng: { items, pagination: { page, pageSize, totalCount, totalPages } }
-  // Cần map page -> pageIndex cho internal use
-  return apiRequest<{
-    items: AdminBroadcast[]
-    pagination: BroadcastsPagination
-  }>(`/admin/broadcasts?${params.toString()}`, { signal }).then((response) => ({
+  // Backend trả { items, totalCount, page, pageSize }; service tính totalPages cho UI.
+  return apiRequest<AdminBroadcastsRawListResponse>(`/admin/broadcasts?${params.toString()}`, { signal }).then((response) => ({
     items: response.items,
     pagination: {
-      page: response.pagination.page,
-      pageSize: response.pagination.pageSize,
-      totalCount: response.pagination.totalCount,
-      totalPages: response.pagination.totalPages,
+      page: response.page,
+      pageSize: response.pageSize,
+      totalCount: response.totalCount,
+      totalPages: response.pageSize > 0 ? Math.ceil(response.totalCount / response.pageSize) : 0,
     },
   }))
 }

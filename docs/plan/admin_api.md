@@ -151,7 +151,7 @@ Admin nhập email/password → auth service gọi login → kiểm tra role →
 2. [x] Thêm type cho login/session và normalize lỗi `{code,message,field,details}`.
 3. [x] Thêm session helper duy nhất chạm `localStorage`, AuthContext và login/guard.
 4. [x] Thêm refresh single-flight; mỗi request được retry tối đa một lần.
-5. [x] Kiểm tra vị trí logout theo UI/design. Chưa thêm nút logout vào shell vì các frame hiện có không xác nhận vị trí; auth context có logout action và luôn xóa session dù API lỗi.
+5. [x] Thêm menu tài khoản TopNav theo mặc định admin-profile-logout-plan: Hồ sơ của tôi (`/profile`) và Đăng xuất; auth context luôn xóa session dù API lỗi. Chưa có xác nhận design riêng từ owner.
 
 #### Files affected
 
@@ -166,7 +166,7 @@ Admin nhập email/password → auth service gọi login → kiểm tra role →
 - [x] **Code có**: 401 thử refresh một lần, retry request tối đa một lần; refresh thất bại ⇒ xoá session và về đăng nhập. ⚠️ **Chưa kiểm chứng qua UI**: Stage 2 đã có request xác thực nhưng test chưa kích hoạt nhánh refresh-on-401; xem `docs/spec/members/README.md` §6 và `G-MEM-5`.
 - [x] Token chỉ được đọc/ghi/xóa qua `src/lib/session.ts`, không lưu trong page/component.
 - [x] Logout luôn xoá session local kể cả khi API trả 401 (`TC-AUTH-51 @real`), và request logout gắn `Authorization: Bearer` (`TC-AUTH-52 @real`).
-- [ ] Nút logout trong shell portal — **chưa có**; hiện chỉ logout được từ banner `login-denied` ở `/login` (`src/pages/Login.tsx:92`). Design chưa xác nhận vị trí (task 5).
+- [x] Nút logout trong shell portal nằm trong AccountMenu ở TopNav; khoá khi pending và dùng logout của auth context. Profile chỉ xem tại `/profile`; xem `docs/spec/profile/README.md` và TC-AUTH-53.
 
 ### Stage 2 — Quản lý danh sách thành viên và trạng thái
 

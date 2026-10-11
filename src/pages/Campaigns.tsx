@@ -67,6 +67,7 @@ const parseStatus = (raw: string | null): StatusFilter =>
 
 const describeError = (error: unknown): string => {
   if (error instanceof ApiError) return error.message;
+  console.error('Unexpected campaigns error:', error);
   return 'Đã xảy ra lỗi không xác định. Vui lòng thử lại.';
 };
 
@@ -539,7 +540,7 @@ export const Campaigns: React.FC = () => {
               }
             >
               {listErrorMessage && (
-                <div role="alert" className="shrink-0 px-4 py-2 border-b border-danger-soft-border bg-danger-soft flex items-center justify-between gap-3">
+                <div role="alert" data-testid="campaigns-list-error" className="shrink-0 px-4 py-2 border-b border-danger-soft-border bg-danger-soft flex items-center justify-between gap-3">
                   <span className="text-[11px] font-medium text-danger-deep">{listErrorMessage}</span>
                   <Button variant="secondary" icon={<ArrowClockwise size={12} />} onClick={refetchList}>
                     Thử lại
@@ -575,7 +576,7 @@ export const Campaigns: React.FC = () => {
 
                   {/* Pagination */}
                   <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-border-premium bg-surface-alt/40">
-                    <p className="text-[10px] font-mono text-muted">{pageInfo}</p>
+                    <p data-testid="campaigns-page-info" className="text-[10px] font-mono text-muted">{pageInfo}</p>
                     <div className="flex items-center gap-2">
                       <label htmlFor="campaigns-page-size" className="text-[10px] font-bold text-muted-light uppercase tracking-wider">
                         Số dòng

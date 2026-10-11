@@ -1,17 +1,8 @@
 import React from 'react';
 import { MagnifyingGlass, Bell, Terminal } from '@phosphor-icons/react';
-import { useAuth } from '../hooks/useAuth';
+import { AccountMenu } from './AccountMenu';
 
 export const TopNav: React.FC<{ overview?: boolean }> = ({ overview = false }) => {
-  const { session } = useAuth();
-  const displayName = session?.identity.fullName || session?.identity.email || 'Quản trị viên';
-  const initials = displayName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-
   return (
     <header className={`h-14 shrink-0 bg-white border-b border-border-premium flex items-center justify-between z-10 select-none ${overview ? 'gap-3 px-4 md:px-6' : 'px-6'}`}>
       {/* Search Input Box */}
@@ -47,15 +38,7 @@ export const TopNav: React.FC<{ overview?: boolean }> = ({ overview = false }) =
         </>}
 
         {/* Admin profile detail */}
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="min-w-0 text-right">
-            <p data-testid="topnav-identity-name" className="truncate text-xs font-semibold text-gray-900 leading-tight">{displayName}</p>
-            <p className="text-[10px] text-gray-400 font-mono leading-none">Quản trị viên</p>
-          </div>
-          <div data-testid="topnav-identity-initials" className="w-8 h-8 shrink-0 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-display text-xs font-bold text-primary shadow-inner">
-            {initials || 'AD'}
-          </div>
-        </div>
+        <AccountMenu />
       </div>
     </header>
   );

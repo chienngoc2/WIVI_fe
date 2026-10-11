@@ -5,6 +5,21 @@ export interface AdminIdentity {
   role: string
 }
 
+export interface AdminProfile {
+  id: string
+  userName: string
+  firstName: string
+  lastName: string
+  fullName: string
+  email: string
+  phone: string | null
+  avatarUrl: string | null
+  role: 'Admin'
+  status: 'Active'
+  createdAt: string
+  lastLoginAt: string | null
+}
+
 export type ReferralSource = 'facebook' | 'tiktok' | 'instagram' | 'friends' | 'other'
 export interface AdminFeedback {
   id: string
@@ -142,7 +157,15 @@ export interface AdminBroadcast {
   deliveredCount: number
 }
 
-/** Envelope phân trang của `/admin/broadcasts`: shape phẳng (khác với `/admin/users`) */
+/** Response thô của `/admin/broadcasts`: shape phẳng, không serialize getter `totalPages`. */
+export interface AdminBroadcastsRawListResponse {
+  items: AdminBroadcast[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
+/** Metadata phân trang được service chuẩn hóa cho trang Campaigns. */
 export interface BroadcastsPagination {
   page: number
   pageSize: number

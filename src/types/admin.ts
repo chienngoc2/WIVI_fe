@@ -268,16 +268,29 @@ export interface UpdatePlanRequest {
 /* Stage 6 — Dashboard (`/api/v1/admin/dashboard`)                            */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * `null` = backend chưa có nguồn số liệu, khác với số 0 đo được.
+ * - `totalUsers`: tài khoản `Active`, mọi vai trò (nghĩa cũ, biểu đồ trạng thái đang dùng).
+ * - `totalAccounts`: tài khoản vai trò `User`, gồm cả `Active` lẫn `Banned`.
+ * - `totalRevenue`: tổng đơn `Paid` được SePay xác nhận, VND; không gồm đơn mock-confirm.
+ */
 export interface AdminDashboardSummary {
   totalUsers: number
+  totalAccounts: number
   newUsersThisMonth: number
   activeUsersLast30Days: number
   bannedUsers: number
   totalTransactions: number
   transactionsThisMonth: number
-  totalJars: number
-  activeGoals: number
-  pendingImportJobs: number
+  totalRevenue: number | null
+  revenueCurrency: 'VND'
+  paidOrders: number | null
+  totalFeedbackVoters: number
+  totalFeedbackSubmissions: number
+  averageRating: number | null
+  totalJars: number | null
+  activeGoals: number | null
+  pendingImportJobs: number | null
 }
 
 export interface AdminDashboardRecentUser {

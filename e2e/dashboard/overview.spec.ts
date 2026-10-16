@@ -4,8 +4,11 @@ import { buildUser, seedStubAdminSession, usersListResponse } from '../fixtures/
 
 const summary = {
   totalUsers: 8, activeUsersLast30Days: 7, bannedUsers: 2,
-  newUsersThisMonth: 0, totalTransactions: 999, transactionsThisMonth: 0,
-  totalJars: 0, activeGoals: 0, pendingImportJobs: 0,
+  totalAccounts: 9, newUsersThisMonth: 3, totalTransactions: 5421, transactionsThisMonth: 610,
+  totalRevenue: 980000, revenueCurrency: 'VND', paidOrders: 20,
+  totalFeedbackVoters: 35, totalFeedbackSubmissions: 41, averageRating: 4.2,
+  // Still without a data source: must never be rendered, whatever the value.
+  totalJars: 777, activeGoals: 777, pendingImportJobs: 777,
 }
 const dashboard = { summary, recentUsers: [], recentTransactions: [] }
 const active = buildUser({ id: 'active-user', firstName: 'Nguyễn', lastName: 'An', email: 'an@example.com', userName: 'nguyenan' })
@@ -28,7 +31,7 @@ test.describe('Overview redesign @stub', () => {
     await expect(chartData(page).getByRole('row')).toHaveCount(3)
     await expect(chartData(page).getByRole('row', { name: 'Hoạt động 8', exact: true })).toHaveCount(1)
     await expect(chartData(page).getByRole('row', { name: 'Bị cấm 2', exact: true })).toHaveCount(1)
-    await expect(page.locator('main')).not.toContainText(/backend|stub|time-series|999/i)
+    await expect(page.locator('main')).not.toContainText(/backend|stub|time-series|777/i)
     await expect(page.getByTestId('app-shell')).not.toContainText(/98\.4|100,240/)
     const chart = page.getByRole('figure', { name: 'Biểu đồ số tài khoản theo trạng thái' })
     const toolbar = await page.getByRole('search').boundingBox()
@@ -40,6 +43,63 @@ test.describe('Overview redesign @stub', () => {
     await bar.hover()
     await expect(chart.locator('.recharts-tooltip-wrapper')).toContainText('8')
     await expect(chart.locator('.recharts-tooltip-wrapper')).toContainText('Số tài khoản')
+  })
+
+  test('summary tiles show the four system totals above the toolbar and link to feedback', async ({ page }) => {
+    await seedDashboard(page)
+    await page.route('**/api/v1/admin/users?*', (route) => route.fulfill({ json: usersListResponse([active]) }))
+    await page.goto('/')
+    const tiles = page.getByTestId('overview-summary-tiles').locator(':scope > section')
+    await expect(tiles).toHaveCount(4)
+    await expect(tiles.nth(0)).toContainText('Tổng người dùng')
+    await expect(tiles.nth(0)).toContainText('9')
+    await expect(tiles.nth(0)).toContainText('3 đăng ký trong tháng này')
+    await expect(tiles.nth(1)).toContainText('Tổng giao dịch')
+    await expect(tiles.nth(1)).toContainText('5.421')
+    await expect(tiles.nth(2)).toContainText('Tổng doanh thu')
+    await expect(tiles.nth(2)).toContainText('980.000 đ')
+    await expect(tiles.nth(2)).toContainText('20 đơn SePay đã xác nhận')
+    await expect(tiles.nth(3)).toContainText('Người đã đánh giá')
+    await expect(tiles.nth(3)).toContainText('35')
+    await expect(tiles.nth(3)).toContainText('41 lượt gửi · trung bình 4,2/5')
+    const tilesBox = await page.getByTestId('overview-summary-tiles').boundingBox()
+    const toolbar = await page.getByRole('search').boundingBox()
+    expect(toolbar!.y).toBeGreaterThan(tilesBox!.y + tilesBox!.height)
+    await tiles.nth(3).getByRole('link', { name: 'Xem đánh giá' }).click()
+    await expect(page).toHaveURL(/\/feedbacks$/)
+  })
+
+  test('unavailable revenue is not shown as zero; a measured zero stays zero', async ({ page }) => {
+    await seedDashboard(page, { ...dashboard, summary: { ...summary, totalRevenue: null, paidOrders: null, totalTransactions: 0, transactionsThisMonth: 0 } })
+    await page.route('**/api/v1/admin/users?*', (route) => route.fulfill({ json: usersListResponse([active]) }))
+    await page.goto('/')
+    const tiles = page.getByTestId('overview-summary-tiles').locator(':scope > section')
+    await expect(tiles.nth(2).locator('dd')).toHaveText(['Chưa có dữ liệu'])
+    await expect(tiles.nth(1).locator('dd').first()).toHaveText('0')
+  })
+
+  for (const [revenue, formatted] of [[0, '0 đ'], [98000.5, '98.000,5 đ']] as const) {
+    test(`revenue ${revenue} remains a valid monetary measurement`, async ({ page }) => {
+      await seedDashboard(page, { ...dashboard, summary: { ...summary, totalRevenue: revenue } })
+      await page.route('**/api/v1/admin/users?*', (route) => route.fulfill({ json: usersListResponse([]) }))
+      await page.goto('/')
+      const revenueTile = page.getByTestId('overview-summary-tiles').locator(':scope > section').nth(2)
+      await expect(revenueTile.locator('dd').first()).toHaveText(formatted)
+    })
+  }
+
+  test('missing new metrics stay unavailable and do not fall back to legacy account counts', async ({ page }) => {
+    await seedDashboard(page, { ...dashboard, summary: {
+      totalUsers: 8, bannedUsers: 2, activeUsersLast30Days: 7,
+      newUsersThisMonth: 3, transactionsThisMonth: 610,
+    } })
+    await page.route('**/api/v1/admin/users?*', (route) => route.fulfill({ json: usersListResponse([]) }))
+    await page.goto('/')
+    const tiles = page.getByTestId('overview-summary-tiles').locator(':scope > section')
+    for (const tile of await tiles.all()) {
+      await expect(tile.locator('dd').first()).toHaveText('Chưa có dữ liệu')
+    }
+    await expect(tiles.nth(3)).not.toContainText('trung bình')
   })
 
   test('search and status filter request real criteria; member navigation retains them', async ({ page }) => {
@@ -150,6 +210,11 @@ test.describe('Overview redesign @stub', () => {
       await page.goto('/')
       await expect(page.getByText('an@example.com')).toBeVisible()
       await expect(page.getByRole('figure')).toBeVisible()
+      const tiles = page.getByTestId('overview-summary-tiles').locator(':scope > section')
+      const firstTile = await tiles.nth(0).boundingBox()
+      const secondTile = await tiles.nth(1).boundingBox()
+      if (width < 640) expect(secondTile!.y).toBeGreaterThan(firstTile!.y + firstTile!.height)
+      else expect(Math.abs(firstTile!.y - secondTile!.y)).toBeLessThan(2)
       const left = await panels(page).first().boundingBox()
       const right = await panels(page).last().boundingBox()
       if (width >= 1024) {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowClockwise, ArrowsLeftRight, Funnel, Users, WarningCircle } from '@phosphor-icons/react'
 import { AccountStatusChart } from '../components/dashboard/AccountStatusChart'
+import { SummaryTiles } from '../components/dashboard/SummaryTiles'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { DataTable } from '../components/ui/DataTable'
@@ -89,6 +90,8 @@ export const Overview = () => {
         <Button variant="secondary" icon={<ArrowClockwise size={14} />} disabled={summaryLoading || usersLoading}
           onClick={() => { refreshSummary(); refreshUsers() }}>Làm mới</Button>
       </div>
+
+      <SummaryTiles summary={summary} loading={summaryLoading} />
 
       <div role="search" aria-label="Tìm kiếm và lọc thành viên" className="flex flex-wrap items-end gap-3">
         <label className="w-full min-w-0 sm:w-2/5">

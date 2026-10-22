@@ -1,32 +1,98 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #7C5CFF;
-  --color-primary-hover: #6C4EE8;
+  /* Accent: đổi duy nhất --color-primary nếu brand cần thay đổi */
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-primary-active: #1E40AF;
+  --color-primary-soft: #EFF6FF;
+  --color-primary-soft-border: #DBEAFE;
+  --color-primary-soft-border-strong: #BFDBFE;
+  --color-primary-on-dark: #3B82F6;
+  --color-primary-ring: rgba(37, 99, 235, 0.28);
+  --color-on-accent: #FFFFFF;
+
+  /* Ink / text */
+  --color-ink: #0F172A;
+  --color-ink-soft: #334155;
+  --color-body: #475569;
+  --color-muted: #64748B;
+  --color-muted-light: #94A3B8;
+  --color-disabled: #CBD5E1;
+
+  /* Surface / border */
+  --color-canvas: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F1F5F9;
+  --color-surface-sunken: #E2E8F0;
+  --color-hairline: #E2E8F0;
+  --color-border-premium: rgba(15, 23, 42, 0.05);
+
+  /* Semantic */
   --color-success: #10B981;
-  --color-success-subtle: rgba(16, 185, 129, 0.08);
+  --color-success-deep: #059669;
+  --color-success-soft: #ECFDF5;
+  --color-success-soft-border: #A7F3D0;
   --color-warning: #F59E0B;
-  --color-warning-subtle: rgba(245, 158, 11, 0.08);
+  --color-warning-deep: #D97706;
+  --color-warning-soft: #FEF3C7;
+  --color-warning-soft-border: #FDE68A;
   --color-danger: #EF4444;
-  --color-danger-subtle: rgba(239, 68, 68, 0.08);
-  
-  --color-bg-main: #F8F9FA;
-  --color-bg-card: #FFFFFF;
-  --color-border-premium: rgba(0, 0, 0, 0.05);
-  
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --color-danger-deep: #DC2626;
+  --color-danger-soft: #FEF2F2;
+  --color-danger-soft-strong: #FEE2E2;
+  --color-danger-soft-border: #FECACA;
+  --color-info: #3B82F6;
+  --color-info-soft: #E0F2FE;
+  --color-vip: #D97706;
+  --color-vip-soft: #FEF3C7;
+
+  /* Dark surfaces: chỉ dành cho AI / Sepay */
+  --color-dark-canvas: #13151B;
+  --color-dark-surface: #181A22;
+  --color-dark-elevated: #222634;
+  --color-dark-hairline: #2F3447;
+  --color-dark-hairline-soft: #222530;
+  --color-dark-text: #E2E8F0;
+  --color-dark-muted: #8A92A6;
+
+  /* Typography */
+  --font-sans: 'Inter', 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Radius */
+  --radius-chip: 10px;
+  --radius-control: 12px;
+  --radius-panel: 16px;
+  --radius-card: 22px;
+  --radius-pill: 9999px;
 }
 
 @layer base {
   body {
-    background-color: var(--color-bg-main);
-    color: #1A1A1E;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
     font-family: var(--font-sans);
+    letter-spacing: -0.006em;
+    line-height: 1.44;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .font-mono,
+  code,
+  kbd {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-/* Custom premium visual utility classes */
 @utility shadow-premium-sm {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02), 0 0 0 1px rgba(0, 0, 0, 0.03);
 }
@@ -39,34 +105,52 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04), 0 12px 32px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
+@utility shadow-float {
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+}
+
+@utility shadow-primary {
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.25);
+}
+
+@utility shadow-primary-sm {
+  box-shadow: 0 3px 6px rgba(37, 99, 235, 0.25);
+}
+
+@utility bg-hero-primary {
+  background-image: linear-gradient(135deg, #3B82F6 0%, #2563EB 52%, #1D4ED8 100%);
+}
+
 @utility border-double-bezel {
-  background: var(--color-bg-card);
+  background: var(--color-surface);
   position: relative;
 }
 
-/* Hide scrollbar utility */
 @utility scrollbar-none {
   -ms-overflow-style: none;
   scrollbar-width: none;
+
   &::-webkit-scrollbar {
     display: none;
   }
 }
 
-/* Standard sleek custom scrollbars for inner lists */
 @utility scrollbar-premium {
   &::-webkit-scrollbar {
     width: 5px;
     height: 5px;
   }
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
+
   &::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
+    background: rgba(15, 23, 42, 0.1);
     border-radius: 99px;
   }
+
   &::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(15, 23, 42, 0.2);
   }
 }

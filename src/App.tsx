@@ -1,35 +1,51 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { Sidebar } from './components/Sidebar';
-import { TopNav } from './components/TopNav';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { AppLayout } from './components/AppLayout';
+import { useAuth } from './hooks/useAuth';
+import { Login } from './pages/Login';
+import { NotFound } from './pages/NotFound';
 import { Overview } from './pages/Overview';
 import { Members } from './pages/Members';
 import { Activity } from './pages/Activity';
 import { Intelligence } from './pages/Intelligence';
 import { Campaigns } from './pages/Campaigns';
 import { Configuration } from './pages/Configuration';
+import { Feedbacks } from './pages/Feedbacks';
+import { Profile } from './pages/Profile';
+
+const RequireAdmin = () => {
+  const { session } = useAuth();
+  const location = useLocation();
+
+  if (!session) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (session.identity.role !== 'Admin') {
+    return <Navigate to="/login" replace state={{ denied: true }} />;
+  }
+
+  return <Outlet />;
+};
 
 function App() {
   return (
     <BrowserRouter>
-      {/* Full-width Layout Shell */}
-      <div className="w-full h-screen flex bg-[#FAFBFD] overflow-hidden relative">
-        <Sidebar />
-        
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <TopNav />
-          {/* Main Workspace Frame with 24px outer padding (p-6) */}
-          <main className="flex-1 overflow-y-auto bg-[#F8F9FA] p-6 scrollbar-premium">
-              <Routes>
-                <Route path="/" element={<Overview />} />
-                <Route path="/members" element={<Members />} />
-                <Route path="/activity" element={<Activity />} />
-                <Route path="/intelligence" element={<Intelligence />} />
-                <Route path="/campaigns" element={<Campaigns />} />
-                <Route path="/configuration" element={<Configuration />} />
-              </Routes>
-            </main>
-          </div>
-      </div>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route element={<RequireAdmin />}>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Overview />} />
+            <Route path="/members" element={<Members />} />
+            <Route path="/feedbacks" element={<Feedbacks />} />
+            <Route path="/activity" element={<Activity />} />
+            <Route path="/intelligence" element={<Intelligence />} />
+            <Route path="/campaigns" element={<Campaigns />} />
+            <Route path="/configuration" element={<Configuration />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Route>
+      </Routes>
     </BrowserRouter>
   );
 }

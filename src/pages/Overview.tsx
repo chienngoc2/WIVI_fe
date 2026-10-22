@@ -1,234 +1,160 @@
-import React from 'react';
-import { Users, Heartbeat, ShieldCheck, CurrencyDollar, ArrowsLeftRight, Cpu, TrendUp } from '@phosphor-icons/react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from 'recharts';
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowClockwise, ArrowsLeftRight, Funnel, Users, WarningCircle } from '@phosphor-icons/react'
+import { AccountStatusChart } from '../components/dashboard/AccountStatusChart'
+import { SummaryTiles } from '../components/dashboard/SummaryTiles'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { DataTable } from '../components/ui/DataTable'
+import { EmptyState } from '../components/ui/EmptyState'
+import { PanelMenu } from '../components/ui/PanelMenu'
+import { SearchInput } from '../components/ui/SearchInput'
+import { SectionCard } from '../components/ui/SectionCard'
+import { ApiError, isAbortError } from '../lib/api/client'
+import { formatDateTime, formatNumber, validCount } from '../lib/format'
+import { getAdminDashboard } from '../services/adminDashboard'
+import { listUsers } from '../services/adminUsers'
+import type { AdminDashboardResponse, AdminUsersListResponse, AdminUserStatus } from '../types/admin'
 
-const userGrowthData = [
-  { name: 'T1', users: 85000, active: 68000 },
-  { name: 'T2', users: 88200, active: 71000 },
-  { name: 'T3', users: 92400, active: 75500 },
-  { name: 'T4', users: 96800, active: 79000 },
-  { name: 'T5', users: 100500, active: 82100 },
-  { name: 'T6', users: 104240, active: 84950 },
-];
+interface Snapshot<T> { key: string; data: T | null; error: string | null }
 
-const revenueTrendData = [
-  { name: 'T1', revenue: 490000, conversion: 28.5 },
-  { name: 'T2', revenue: 510000, conversion: 29.2 },
-  { name: 'T3', revenue: 545000, conversion: 30.1 },
-  { name: 'T4', revenue: 580000, conversion: 30.8 },
-  { name: 'T5', revenue: 615000, conversion: 31.4 },
-  { name: 'T6', revenue: 642800, conversion: 32.8 },
-];
+const loadError = (error: unknown, fallback: string): string =>
+  error instanceof ApiError && error.status === 403 ? 'Bạn không có quyền xem dữ liệu này.' : fallback
 
-const segments = [
-  { name: 'Tích lũy tài sản', share: '38%', count: '39.6k thành viên', color: 'bg-primary' },
-  { name: 'Xử lý nợ xấu', share: '24%', count: '25.0k thành viên', color: 'bg-indigo-400' },
-  { name: 'Nhà đầu tư tích cực', share: '21%', count: '21.9k thành viên', color: 'bg-emerald-400' },
-  { name: 'Tiết kiệm vãng lai', share: '17%', count: '17.7k thành viên', color: 'bg-amber-400' },
-];
+export const Overview = () => {
+  const navigate = useNavigate()
+  const [keyword, setKeyword] = useState('')
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState<AdminUserStatus | 'all'>('all')
+  const [summaryRevision, setSummaryRevision] = useState(0)
+  const [usersRevision, setUsersRevision] = useState(0)
+  const [dashboard, setDashboard] = useState<Snapshot<AdminDashboardResponse> | null>(null)
+  const [users, setUsers] = useState<Snapshot<AdminUsersListResponse> | null>(null)
+  const summaryKey = String(summaryRevision)
+  const usersKey = JSON.stringify([search, status, usersRevision])
+  const currentDashboard = dashboard?.key === summaryKey ? dashboard : null
+  const currentUsers = users?.key === usersKey ? users : null
+  const summaryLoading = currentDashboard === null
+  const usersLoading = currentUsers === null
 
-const activeUsers = [
-  { name: 'Nguyễn Văn A', usage: '156 GD/tháng', score: '94/100', status: 'Gói Pro' },
-  { name: 'Trần Thị B', usage: '142 GD/tháng', score: '91/100', status: 'Gói Premium' },
-  { name: 'Phạm Minh C', usage: '128 GD/tháng', score: '88/100', status: 'Gói Pro' },
-  { name: 'Vũ Minh F', usage: '115 GD/tháng', score: '92/100', status: 'Gói Premium' },
-];
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(keyword.trim()), 350)
+    return () => window.clearTimeout(timer)
+  }, [keyword])
 
-const activities = [
-  { id: '1', type: 'quota_warn', message: 'Hạn ngạch đạt ngưỡng cảnh báo đối với user Hoàng Văn E. (94% dung lượng)', time: '3 phút trước' },
-  { id: '2', type: 'risk_alert', message: 'Phát hiện bất thường giao dịch trên mã node transaction #8491A', time: '14 phút trước' },
-  { id: '3', type: 'sub_renew', message: 'Gia hạn gói Pro thành công: Nguyễn Văn A (990.000 đ)', time: '28 phút trước' },
-  { id: '4', type: 'ai_optim', message: 'Mô hình AI tự động tối ưu hóa cấu trúc phân loại giao dịch ngân hàng', time: '1 giờ trước' },
-];
+  useEffect(() => {
+    const controller = new AbortController()
+    getAdminDashboard(controller.signal).then((data) => {
+      if (!controller.signal.aborted) setDashboard({ key: summaryKey, data, error: null })
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted && !isAbortError(error)) setDashboard({ key: summaryKey, data: null, error: loadError(error, 'Không tải được thống kê tài khoản') })
+    })
+    return () => controller.abort()
+  }, [summaryKey])
 
-export const Overview: React.FC = () => {
+  useEffect(() => {
+    const controller = new AbortController()
+    listUsers({ pageIndex: 1, pageSize: 8, status: status === 'all' ? null : status, keyword: search || null, signal: controller.signal }).then((data) => {
+      if (!controller.signal.aborted) setUsers({ key: usersKey, data, error: null })
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted && !isAbortError(error)) setUsers({ key: usersKey, data: null, error: loadError(error, 'Không tải được danh sách thành viên') })
+    })
+    return () => controller.abort()
+  }, [search, status, usersKey])
+
+  const refreshSummary = () => setSummaryRevision((value) => value + 1)
+  const refreshUsers = () => setUsersRevision((value) => value + 1)
+  const resetFilters = () => { setKeyword(''); setSearch(''); setStatus('all') }
+  const openMembers = () => {
+    const params = new URLSearchParams()
+    if (search) params.set('keyword', search)
+    if (status !== 'all') params.set('status', status)
+    navigate(`/members${params.size ? `?${params}` : ''}`)
+  }
+  const summary = currentDashboard?.data?.summary ?? null
+  const transactions = currentDashboard?.data?.recentTransactions ?? []
+  const filtered = Boolean(search) || status !== 'all'
+  const summaryRows = [
+    { label: 'Tài khoản hoạt động', value: validCount(summary?.totalUsers) },
+    { label: 'Đăng nhập trong 30 ngày', value: validCount(summary?.activeUsersLast30Days) },
+    { label: 'Tài khoản bị cấm', value: validCount(summary?.bannedUsers) },
+  ]
+
   return (
-    <div className="h-full flex flex-col justify-between gap-5 select-none w-full text-xs">
-      {/* Title Header */}
-      <div className="flex justify-between items-center h-10 px-1">
-        <div>
-          <h1 className="text-xl font-bold font-display text-gray-900 tracking-tight flex items-center gap-2">
-            Tổng Quan Hệ Thống WIVI
-          </h1>
-          <p className="text-[11px] text-gray-500 font-medium font-sans">
-            Trạng thái hoạt động vận hành & phân tích số liệu tài chính thời gian thực.
-          </p>
+    <div data-testid="overview-workspace" className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-4 pb-4 text-xs lg:gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-xl font-bold tracking-tight text-ink">Tổng quan hệ thống WIVI</h1>
+          <p className="mt-1 text-xs text-muted">Theo dõi tài khoản và hoạt động thành viên.</p>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-[#10B981]/10 px-2.5 py-1 rounded-md border border-[#10B981]/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span>
-            <span className="text-[10px] font-mono font-bold text-success uppercase tracking-wider">Hệ thống ổn định nominal</span>
-          </div>
-          <button className="bg-primary hover:bg-primary-hover text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-premium-sm active:scale-95">
-            Báo cáo nhanh
-          </button>
-        </div>
+        <Button variant="secondary" icon={<ArrowClockwise size={14} />} disabled={summaryLoading || usersLoading}
+          onClick={() => { refreshSummary(); refreshUsers() }}>Làm mới</Button>
       </div>
 
-      {/* KPI Cards Grid - High Information Density (6 Columns) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-        {[
-          { label: 'Tổng Thành Viên', val: '104,240', change: '+8.4%', up: true, icon: <Users size={16} className="text-primary" /> },
-          { label: 'Thành Viên Active', val: '84,950', change: '+12.1%', up: true, icon: <Heartbeat size={16} className="text-emerald-500" /> },
-          { label: 'Gói Trả Phí', val: '32,840', change: '+14.2%', up: true, icon: <ShieldCheck size={16} className="text-indigo-500" /> },
-          { label: 'Doanh Thu MTD', val: '642,8M đ', change: '+19.5%', up: true, icon: <CurrencyDollar size={16} className="text-success" /> },
-          { label: 'Giao Dịch MTD', val: '2,14M', change: '+5.2%', up: true, icon: <ArrowsLeftRight size={16} className="text-amber-500" /> },
-          { label: 'Hạn ngạch AI dùng', val: '62.2%', change: '+0.8%', up: true, icon: <Cpu size={16} className="text-purple-500" /> },
-        ].map((kpi, idx) => (
-          <div key={idx} className="bg-white p-4 rounded-2xl border border-border-premium shadow-premium-sm flex flex-col justify-between h-[95px] hover:border-primary/20 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{kpi.label}</span>
-              <div className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center border border-border-premium">
-                {kpi.icon}
-              </div>
-            </div>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-base font-bold font-display text-gray-900 leading-tight">{kpi.val}</span>
-              <span className="text-[9px] font-semibold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center gap-0.5 font-mono">
-                <TrendUp size={10} />
-                {kpi.change}
-              </span>
-            </div>
-          </div>
-        ))}
+      <SummaryTiles summary={summary} loading={summaryLoading} />
+
+      <div role="search" aria-label="Tìm kiếm và lọc thành viên" className="flex flex-wrap items-end gap-3">
+        <label className="w-full min-w-0 sm:w-2/5">
+          <span className="mb-1.5 block font-semibold text-ink-soft">Tìm thành viên</span>
+          <SearchInput value={keyword} onChange={setKeyword} placeholder="Tên, tài khoản hoặc email…" />
+        </label>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-none">
+          <label htmlFor="overview-status" className="flex items-center gap-1.5 font-semibold text-ink-soft"><Funnel size={13} />Trạng thái tài khoản</label>
+          <select id="overview-status" value={status} onChange={(event) => setStatus(event.target.value as AdminUserStatus | 'all')}
+            className="h-8 w-full rounded-control border border-hairline bg-surface px-3 text-xs text-ink outline-none focus:ring-2 focus:ring-primary-ring sm:w-48">
+            <option value="all">Tất cả trạng thái</option><option value="Active">Hoạt động</option><option value="Banned">Bị cấm</option>
+          </select>
+        </div>
+        {(keyword || status !== 'all') && <Button variant="ghost" onClick={resetFilters}>Xóa bộ lọc</Button>}
       </div>
 
-      {/* Middle Grid - Charts (12-Column Layout, 2 Columns) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[250px]">
-        {/* User Growth Chart (Left Column) */}
-        <div className="bg-white p-4 rounded-2xl border border-border-premium shadow-premium-sm flex flex-col justify-between h-full">
-          <div className="flex justify-between items-center mb-1">
-            <div>
-              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Tốc Độ Tăng Trưởng Thành Viên</h3>
-              <p className="text-[10px] text-gray-400">Số lượng thành viên hoạt động trên hệ thống</p>
-            </div>
-            <div className="flex gap-4 text-[10px] font-mono">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary"></span> Tổng số</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-400"></span> Active</span>
-            </div>
-          </div>
-          <div className="flex-1 min-h-0 w-full mt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={userGrowthData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" vertical={false} />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 9, fill: '#8E9AA8' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 9, fill: '#8E9AA8' }} />
-                <Tooltip 
-                  contentStyle={{ background: '#fff', border: '1px solid rgba(0,0,0,0.05)', borderRadius: '8px', fontSize: '11px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} 
-                  labelStyle={{ fontWeight: 'bold' }} 
-                />
-                <Line type="monotone" dataKey="users" stroke="#7C5CFF" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                <Line type="monotone" dataKey="active" stroke="#818CF8" strokeWidth={2} strokeDasharray="4 4" dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      <SectionCard title="Phân bố trạng thái tài khoản" subtitle="Số lượng tại thời điểm cập nhật gần nhất" className="w-full min-w-0 [&_header_h3]:whitespace-normal" bodyClassName="min-w-0">
+        <AccountStatusChart summary={summary} status={status} loading={summaryLoading} error={currentDashboard?.error ?? null} onRetry={refreshSummary} />
+        <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-muted">Biểu đồ thể hiện trạng thái tài khoản hiện tại. Thống kê xu hướng theo thời gian chưa khả dụng.</p>
+      </SectionCard>
 
-        {/* Subscription & Revenue conversion chart (Right Column) */}
-        <div className="bg-white p-4 rounded-2xl border border-border-premium shadow-premium-sm flex flex-col justify-between h-full">
-          <div className="flex justify-between items-center mb-1">
-            <div>
-              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Doanh Thu & Tỷ Lệ Chuyển Đổi</h3>
-              <p className="text-[10px] text-gray-400">Doanh thu định kỳ hàng tháng và chỉ số nâng cấp gói</p>
-            </div>
-            <div className="flex gap-4 text-[10px] font-mono">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Doanh thu</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary"></span> Tỷ lệ chuyển đổi</span>
-            </div>
-          </div>
-          <div className="flex-1 min-h-0 w-full mt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueTrendData} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" vertical={false} />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 9, fill: '#8E9AA8' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 9, fill: '#8E9AA8' }} />
-                <Tooltip 
-                  contentStyle={{ background: '#fff', border: '1px solid rgba(0,0,0,0.05)', borderRadius: '8px', fontSize: '11px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} 
-                  labelStyle={{ fontWeight: 'bold' }} 
-                />
-                <Area type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#colorRev)" />
-                <Line type="monotone" dataKey="conversion" stroke="#7C5CFF" strokeWidth={1.5} dot={{ r: 2 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
+      <div data-testid="overview-bottom-panels" className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:gap-6">
+        <SectionCard title={filtered ? 'Kết quả tìm kiếm thành viên' : 'Thành viên mới đăng ký'}
+          subtitle={currentUsers?.data ? `${formatNumber(currentUsers.data.pagination.totalCount)} thành viên${filtered ? ' phù hợp' : ' · tối đa 8 tài khoản mới nhất'}` : undefined}
+          className="min-w-0 [&_header_h3]:whitespace-normal" bodyClassName="min-w-0"
+          right={<PanelMenu label="Tùy chọn danh sách thành viên" actions={[
+            { label: 'Xem tất cả thành viên', onSelect: openMembers },
+            { label: 'Làm mới danh sách', onSelect: refreshUsers, disabled: usersLoading },
+          ]} />}>
+          {usersLoading ? <div role="status" className="py-12 text-center text-muted">Đang tải thành viên…</div>
+            : currentUsers?.error ? <div role="alert"><EmptyState icon={<WarningCircle size={18} />} title={currentUsers.error} action={<Button variant="secondary" onClick={refreshUsers}>Thử lại danh sách</Button>} /></div>
+            : <DataTable className="[&_table]:min-w-[560px]" rows={currentUsers?.data?.data ?? []} rowKey={(user) => user.id}
+              columns={[
+                { key: 'name', header: 'Thành viên', render: (user) => <div className="max-w-64 break-words"><p className="font-semibold text-ink">{`${user.firstName} ${user.lastName}`.trim() || user.userName}</p><p className="mt-1 text-[11px] text-muted">{user.email}</p></div> },
+                { key: 'status', header: 'Trạng thái', render: (user) => <Badge tone={user.status === 'Active' ? 'success' : 'danger'}>{user.status === 'Active' ? 'Hoạt động' : 'Bị cấm'}</Badge> },
+                { key: 'createdAt', header: 'Ngày đăng ký', render: (user) => <span className="whitespace-nowrap text-[11px] text-muted">{formatDateTime(user.createdAt)}</span> },
+              ]}
+              empty={<EmptyState colSpan={3} icon={<Users size={18} />} title={filtered ? 'Không tìm thấy thành viên phù hợp' : 'Chưa có thành viên nào'}
+                description={filtered ? 'Thử từ khóa khác hoặc xóa bộ lọc.' : 'Thành viên mới sẽ xuất hiện tại đây.'}
+                action={filtered ? <Button variant="secondary" onClick={resetFilters}>Xóa bộ lọc</Button> : undefined} />} />}
+        </SectionCard>
 
-      {/* Bottom Grid - Executive Widgets (3 Columns) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[200px]">
-        {/* User Segments */}
-        <div className="bg-white p-4 rounded-2xl border border-border-premium shadow-premium-sm flex flex-col justify-between h-full">
-          <div>
-            <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">Phân Khúc Người Dùng</h3>
-            <div className="space-y-2 max-h-[130px] overflow-y-auto scrollbar-none">
-              {segments.map((seg, i) => (
-                <div key={i} className="flex items-center justify-between text-xs py-0.5">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${seg.color}`}></div>
-                    <span className="text-gray-600 font-medium">{seg.name}</span>
-                  </div>
-                  <div className="flex gap-2 font-mono text-gray-400">
-                    <span className="text-gray-800 font-semibold">{seg.share}</span>
-                    <span>({seg.count})</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+        <SectionCard title="Tóm tắt tài khoản" subtitle="Toàn hệ thống" className="min-w-0 [&_header_h3]:whitespace-normal" right={<PanelMenu label="Tùy chọn tóm tắt tài khoản" actions={[
+          { label: 'Làm mới thống kê', onSelect: refreshSummary, disabled: summaryLoading },
+          { label: 'Quản lý thành viên', onSelect: () => navigate('/members') },
+        ]} />}>
+          {summaryLoading ? <div role="status" className="py-6 text-muted">Đang tải tóm tắt…</div>
+            : currentDashboard?.error ? <p className="text-xs text-muted">Tóm tắt tạm thời chưa khả dụng.</p>
+            : <dl className="divide-y divide-hairline">{summaryRows.map((row) => <div key={row.label} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-3 first:pt-0">
+              <dt className="text-xs text-muted">{row.label}</dt><dd className={`${row.value === null ? 'text-xs text-muted' : 'font-mono text-lg font-bold text-ink'} break-words`}>{formatNumber(row.value)}</dd>
+            </div>)}</dl>}
+          <div className="mt-4 border-t border-hairline pt-4">
+            <h2 className="mb-2 flex items-center gap-1.5 font-semibold text-ink-soft"><ArrowsLeftRight size={14} />Giao dịch gần đây</h2>
+            {summaryLoading ? <p className="text-[11px] text-muted">Đang tải…</p>
+              : currentDashboard?.error || transactions.length === 0 ? <p className="text-[11px] leading-relaxed text-muted">Thông tin giao dịch gần đây chưa khả dụng.</p>
+              : <ul className="space-y-3">{transactions.slice(0, 3).map((transaction) => <li key={transaction.id} className="min-w-0 break-words text-[11px]">
+                <p className="font-semibold text-ink-soft">{`${transaction.user.firstName} ${transaction.user.lastName}`.trim() || transaction.user.username}</p>
+                <p className="mt-1 text-muted">{transaction.type === 'Income' ? 'Thu' : transaction.type === 'Expense' ? 'Chi' : 'Giao dịch'} · {transaction.category.name} · {formatNumber(transaction.transactionsAmount)} đ</p>
+                <p className="mt-1 text-muted">{formatDateTime(transaction.transactionDate)}</p>
+              </li>)}</ul>}
           </div>
-        </div>
-
-        {/* Most Active Users */}
-        <div className="bg-white p-4 rounded-2xl border border-border-premium shadow-premium-sm flex flex-col justify-between h-full">
-          <div>
-            <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">Thành Viên Tích Cực Nhất</h3>
-            <div className="space-y-2 max-h-[130px] overflow-y-auto scrollbar-none">
-              {activeUsers.map((user, i) => (
-                <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-gray-50 last:border-0">
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-gray-800">{user.name}</span>
-                    <span className="text-[10px] text-gray-400">{user.usage}</span>
-                  </div>
-                  <div className="text-right flex flex-col items-end">
-                    <span className="text-[10px] font-mono font-bold text-emerald-500 bg-emerald-500/5 px-1.5 py-0.2 rounded border border-emerald-500/10">
-                      Điểm: {user.score}
-                    </span>
-                    <span className="text-[9px] text-gray-400 font-mono mt-0.5">{user.status}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Activities */}
-        <div className="bg-white p-4 rounded-2xl border border-border-premium shadow-premium-sm flex flex-col justify-between h-full">
-          <div>
-            <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">Hoạt Động Hệ Thống Gần Đây</h3>
-            <div className="space-y-2 max-h-[130px] overflow-y-auto scrollbar-none">
-              {activities.map((act) => (
-                <div key={act.id} className="flex items-start justify-between text-[11px] gap-2 py-0.5">
-                  <div className="flex gap-1.5 items-start">
-                    <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                      act.type === 'quota_warn' ? 'bg-amber-500 animate-pulse' :
-                      act.type === 'risk_alert' ? 'bg-red-500 animate-pulse' :
-                      act.type === 'sub_renew' ? 'bg-emerald-500' : 'bg-primary'
-                    }`}></span>
-                    <p className="text-gray-600 line-clamp-2 leading-snug">{act.message}</p>
-                  </div>
-                  <span className="text-[9px] text-gray-400 font-mono shrink-0 whitespace-nowrap">{act.time}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        </SectionCard>
       </div>
     </div>
-  );
-};
+  )
+}

@@ -46,6 +46,14 @@ const apiRoot = (): string => {
       details: {},
     })
   }
+
+  // Khi chạy trên môi trường HTTPS (như Vercel) nhưng API base URL là HTTP không có SSL,
+  // chuyển hướng dùng same-origin '/api/v1' để đi qua reverse proxy của vercel.json,
+  // tránh lỗi trình duyệt chặn "Mixed Content".
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && configuredBase.startsWith('http://')) {
+    return '/api/v1'
+  }
+
   return `${configuredBase}/api/v1`
 }
 

@@ -19,6 +19,7 @@ const buildPlans = (count: number): AdminSubscriptionPlan[] => Array.from({ leng
   currency: 'VND',
   billingCycle: 'monthly',
   features: ['Báo cáo nâng cao'],
+  tokenLimit: 10000,
   isActive: true,
 }))
 

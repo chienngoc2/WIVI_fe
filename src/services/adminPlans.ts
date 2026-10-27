@@ -4,6 +4,7 @@ import type {
   AdminSubscriptionPlan,
   CreatePlanRequest,
   UpdatePlanRequest,
+  UpdatePlanResponse,
 } from '../types/admin'
 
 export const listPlans = (signal?: AbortSignal): Promise<AdminPlansListResponse> =>
@@ -19,8 +20,8 @@ export const createPlan = (payload: CreatePlanRequest): Promise<AdminSubscriptio
 export const updatePlan = (
   planId: string,
   payload: UpdatePlanRequest,
-): Promise<AdminSubscriptionPlan> =>
-  apiRequest<AdminSubscriptionPlan>(
+): Promise<UpdatePlanResponse> =>
+  apiRequest<UpdatePlanResponse>(
     `/admin/subscriptions/plans/${encodeURIComponent(planId)}`,
     { method: 'PATCH', body: JSON.stringify(payload) },
     { retryUnauthorized: false },

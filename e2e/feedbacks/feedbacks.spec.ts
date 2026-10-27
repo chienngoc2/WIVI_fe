@@ -6,9 +6,21 @@ import type { AdminFeedback, AdminFeedbackSummary } from '../../src/types/admin'
 
 const feedback: AdminFeedback = { id: 'f1', userId: 'u1', userName: 'alice', email: 'alice@example.com', rating: 5, referralSource: 'facebook', comment: 'Ứng dụng tiện lợi', createdAt: '2026-10-05T02:00:00.000Z' }
 const summary: AdminFeedbackSummary = { totalSubmissions: 5, totalVoters: 4, averageRating: 3.75, ratingDistribution: [1, 2, 3, 4, 5].map(rating => ({ rating, count: rating === 5 ? 2 : 0 })), referralSources: ['facebook', 'tiktok', 'instagram', 'friends', 'other'].map(referralSource => ({ referralSource: referralSource as AdminFeedback['referralSource'], count: referralSource === 'facebook' ? 1 : 0 })) }
+const trend = {
+  fromDate: '2026-09-24',
+  toDate: '2026-10-23',
+  granularity: 'day',
+  timezone: 'Asia/Ho_Chi_Minh',
+  totalSubmissions: 5,
+  points: [
+    { period: '2026-10-01', submissions: 2, uniqueUsers: 2, averageRating: 4.0 },
+    { period: '2026-10-05', submissions: 3, uniqueUsers: 2, averageRating: 3.5 },
+  ],
+}
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/v1/admin/feedbacks/summary*', route => route.fulfill({ json: summary }))
+  await page.route('**/api/v1/admin/feedbacks/trend*', route => route.fulfill({ json: trend }))
 })
 test('filters and pagination use the flat API contract @stub', async ({ page }) => {
   await seedStubAdminSession(page)
@@ -127,4 +139,28 @@ test('real User cannot enter feedbacks @real', async ({ page }) => {
   await seedSession(page, await realUserSession())
   await page.goto('/feedbacks')
   await expect(page).toHaveURL(/\/login$/)
+})
+
+test('referral sources is vertical column chart and trend line chart is rendered @stub', async ({ page }) => {
+  await seedStubAdminSession(page)
+  await page.route('**/api/v1/admin/feedbacks?*', (route) =>
+    route.fulfill({
+      json: { items: [feedback], totalCount: 1, page: 1, pageSize: 20 },
+    }),
+  )
+  await page.goto('/feedbacks')
+  await expect(page.getByRole('img', { name: 'Nguồn giới thiệu' })).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Phân bố số sao' })).toBeVisible()
+  await expect(
+    page.getByRole('figure', {
+      name: 'Biểu đồ xu hướng đánh giá theo thời gian',
+    }),
+  ).toBeVisible()
+
+  // Test date filter validation
+  await page.getByLabel('Từ ngày').fill('2026-10-25')
+  await page.getByLabel('Đến ngày').fill('2026-10-10')
+  await expect(
+    page.getByText('Từ ngày phải trước hoặc bằng Đến ngày.'),
+  ).toBeVisible()
 })

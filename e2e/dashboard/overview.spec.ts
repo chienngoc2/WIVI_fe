@@ -164,10 +164,10 @@ test.describe('Overview redesign @stub', () => {
     })
     await page.route('**/api/v1/admin/users?*', (route) => route.fulfill(failed ? { status: 500, json: { message: 'Internal backend SQL diagnostics' } } : { json: usersListResponse([active]) }))
     await page.goto('/')
-    await expect(page.getByRole('status').filter({ hasText: 'Đang tải thống kê' })).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: 'Đang tải thống kê tài khoản' })).toBeVisible()
     await expect(page.getByRole('alert').filter({ hasText: 'Không tải được danh sách' })).toBeVisible()
     release()
-    await expect(page.getByRole('alert').filter({ hasText: 'Không tải được thống kê' })).toBeVisible()
+    await expect(page.getByRole('alert').filter({ hasText: 'Không tải được thống kê tài khoản' })).toBeVisible()
     await expect(page.locator('main')).not.toContainText(/Internal|SQL|backend/)
     failed = false
     await page.getByRole('button', { name: 'Thử lại thống kê' }).click()
@@ -230,4 +230,52 @@ test.describe('Overview redesign @stub', () => {
       await page.screenshot({ path: testInfo.outputPath(`dashboard-${width}.png`), fullPage: true })
     })
   }
+
+  test('registration trend card renders line chart and updates on range preset @stub', async ({ page }) => {
+    await seedDashboard(page)
+    await page.route('**/api/v1/admin/users?*', (route) =>
+      route.fulfill({ json: usersListResponse([active]) }),
+    )
+
+    const regQueries: URLSearchParams[] = []
+    await page.route('**/api/v1/admin/dashboard/registrations*', (route) => {
+      const q = new URL(route.request().url()).searchParams
+      regQueries.push(q)
+      return route.fulfill({
+        json: {
+          fromDate: q.get('fromDate') || '2026-09-24',
+          toDate: q.get('toDate') || '2026-10-23',
+          granularity: 'day',
+          timezone: 'Asia/Ho_Chi_Minh',
+          totalRegistrations: 12,
+          points: [
+            { period: '2026-10-01', registrations: 5 },
+            { period: '2026-10-15', registrations: 7 },
+          ],
+        },
+      })
+    })
+
+    await page.goto('/')
+    await expect(
+      page.getByText('Người dùng đăng ký theo thời gian'),
+    ).toBeVisible()
+    await expect(page.getByText('12 người đăng ký')).toBeVisible()
+
+    const initialCalls = regQueries.length
+    expect(initialCalls).toBeGreaterThan(0)
+
+    // Click 7 ngày preset
+    await page.getByRole('button', { name: '7 ngày' }).click()
+    await expect.poll(() => regQueries.length).toBeGreaterThan(initialCalls)
+
+    // Invalid range test: set fromDate > toDate
+    const callsBeforeInvalid = regQueries.length
+    await page.getByLabel('Từ ngày').fill('2026-10-25')
+    await page.getByLabel('Đến ngày').fill('2026-10-10')
+    await expect(
+      page.getByText('Từ ngày phải trước hoặc bằng Đến ngày.'),
+    ).toBeVisible()
+    expect(regQueries.length).toBe(callsBeforeInvalid)
+  })
 })

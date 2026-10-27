@@ -26,25 +26,31 @@ src/
 ├── App.tsx, main.tsx, index.css
 ├── components/
 │   ├── AppLayout.tsx, Sidebar.tsx, TopNav.tsx
+│   ├── charts/
+│   │   └── TimeSeriesChart.tsx
+│   ├── dashboard/
+│   │   ├── AccountStatusChart.tsx, RegistrationTrendCard.tsx, SummaryTiles.tsx
 │   └── ui/
-│       ├── Badge.tsx, Button.tsx, DataTable.tsx, EmptyState.tsx
+│       ├── Badge.tsx, Button.tsx, DataTable.tsx, DateRangeFilter.tsx, EmptyState.tsx
 │       └── Modal.tsx, SearchInput.tsx, SectionCard.tsx
 ├── context/
 │   ├── AuthProvider.tsx
 │   └── auth-context.ts
 ├── hooks/
-│   └── useAuth.ts
+│   ├── useAuth.ts
+│   └── useReportRange.ts
 ├── lib/
 │   ├── api/client.ts
+│   ├── dateRange.ts
 │   ├── format.ts
 │   └── session.ts
 ├── pages/
 │   ├── Login.tsx, NotFound.tsx
-│   ├── Overview.tsx, Members.tsx, Activity.tsx, Intelligence.tsx
+│   ├── Overview.tsx, Members.tsx, Feedbacks.tsx, Activity.tsx, Intelligence.tsx
 │   └── Campaigns.tsx, Configuration.tsx
 ├── services/
-│   ├── auth.ts, adminUsers.ts, adminBroadcasts.ts
-│   └── adminAiSettings.ts, adminPlans.ts, adminDashboard.ts
+│   ├── auth.ts, adminUsers.ts, adminBroadcasts.ts, adminFeedbacks.ts
+│   └── adminAiSettings.ts, adminPlans.ts, adminDashboard.ts, adminRevenue.ts, adminAiUsage.ts, adminSepay.ts
 └── types/
     └── admin.ts
 ```

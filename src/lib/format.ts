@@ -32,3 +32,37 @@ export const formatDateTime = (value: string | null | undefined): string => {
   if (Number.isNaN(parsed.getTime())) return '—'
   return dateTimeFormatter.format(parsed)
 }
+
+/**
+ * Format tiền VND: `"1.250.000 đ"`, null/undefined/NaN ⇒ `"Chưa có dữ liệu"`.
+ */
+export const formatVnd = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return 'Chưa có dữ liệu'
+  }
+  return `${numberFormatter.format(Math.round(value))} đ`
+}
+
+/**
+ * Format tỷ lệ: `0.25` ⇒ `"25%"`, null/undefined ⇒ `"0%"`.
+ */
+export const formatPercent = (ratio: number | null | undefined): string => {
+  if (ratio === null || ratio === undefined || !Number.isFinite(ratio)) {
+    return '0%'
+  }
+  const pct = Math.round(ratio * 10000) / 100
+  return `${numberFormatter.format(pct)}%`
+}
+
+/**
+ * Format period: 'YYYY-MM-DD' ⇒ 'DD/MM', 'YYYY-MM' ⇒ 'MM/YYYY'.
+ */
+export const formatPeriod = (period: string, granularity?: 'day' | 'month'): string => {
+  if (!period) return ''
+  if (granularity === 'month' || period.length === 7) {
+    const [y, m] = period.split('-')
+    return `${m}/${y}`
+  }
+  const [, m, d] = period.split('-')
+  return `${d}/${m}`
+}

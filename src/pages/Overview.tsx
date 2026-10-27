@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowClockwise, ArrowsLeftRight, Funnel, Users, WarningCircle } from '@phosphor-icons/react'
 import { AccountStatusChart } from '../components/dashboard/AccountStatusChart'
+import { RegistrationTrendCard } from '../components/dashboard/RegistrationTrendCard'
 import { SummaryTiles } from '../components/dashboard/SummaryTiles'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -110,8 +111,10 @@ export const Overview = () => {
 
       <SectionCard title="Phân bố trạng thái tài khoản" subtitle="Số lượng tại thời điểm cập nhật gần nhất" className="w-full min-w-0 [&_header_h3]:whitespace-normal" bodyClassName="min-w-0">
         <AccountStatusChart summary={summary} status={status} loading={summaryLoading} error={currentDashboard?.error ?? null} onRetry={refreshSummary} />
-        <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-muted">Biểu đồ thể hiện trạng thái tài khoản hiện tại. Thống kê xu hướng theo thời gian chưa khả dụng.</p>
+        <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-muted">Biểu đồ thể hiện trạng thái tài khoản hiện tại.</p>
       </SectionCard>
+
+      <RegistrationTrendCard />
 
       <div data-testid="overview-bottom-panels" className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:gap-6">
         <SectionCard title={filtered ? 'Kết quả tìm kiếm thành viên' : 'Thành viên mới đăng ký'}

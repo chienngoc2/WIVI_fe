@@ -33,11 +33,11 @@ Page → service theo domain → lib/api/client.ts → /api/v1/*
 | --- | --- | --- |
 | `Login.tsx` | `auth.ts` | Login/logout/refresh đã có code và test auth. |
 | `Members.tsx` | `adminUsers.ts` | GET list/detail, PATCH status. URL search params là nguồn filter/page. Test đọc backend thật và stub có trong `e2e/members/`; ca mutation thật chưa chạy trọn vẹn. |
-| `Campaigns.tsx` | `adminBroadcasts.ts` | GET/POST broadcasts. POST tạo `Queued`; GET đang đọc `response.pagination` dù handler trả pagination phẳng. `totalPages` là getter có thể vắng trong JSON. Filter/page chỉ đọc URL lúc khởi tạo, sau đó dùng state local. |
+| `Campaigns.tsx` | `adminBroadcasts.ts` | GET/POST broadcasts, GET stats. Xác nhận modal, fan-out thông báo tới user Active, tỷ lệ đã đọc và lọc status. Đã bỏ mock automation. |
 | `Configuration.tsx` | `adminAiSettings.ts`, `adminPlans.ts` | GET/PATCH AI settings, GET/POST/PATCH plans. AI form submit thiếu `preventDefault`; rebalance cho sửa nhưng không PATCH. Plan update gửi field backend bỏ qua; list chỉ có active plans. |
-| `Overview.tsx` | `adminDashboard.ts` | GET dashboard. Ba counter được backend tính; sáu counter stub; hai recent lists rỗng; không có time-series. |
-| `Activity.tsx` | — | Mock giao dịch/chart cục bộ; chưa có admin transaction-list API. |
-| `Intelligence.tsx` | — | Mock risk/churn/AI quota cục bộ; chưa có admin API cho các chỉ số này. Audit-log backend có API nhưng FE chưa nối. |
+| `Overview.tsx` | `adminDashboard.ts` | GET dashboard, GET registrations time-series (chuỗi đăng ký theo thời gian có zero-fill). |
+| `Activity.tsx` | `adminRevenue.ts`, `adminPlans.ts` | Sổ cái mua gói: GET orders (phân trang/lọc trạng thái/gói/tìm kiếm), GET revenue (tốc độ tăng trưởng doanh thu, doanh thu theo gói, đơn SePay). 100% dữ liệu thật. |
+| `Intelligence.tsx` | `adminAiUsage.ts`, `adminSepay.ts`, `adminAiSettings.ts`, `adminRevenue.ts` | Vận hành AI & SePay: GET AI usage report, GET SePay webhook stats, GET AI settings. 100% dữ liệu thật, không còn mock. |
 
 ## Các nhánh mock và giới hạn backend
 

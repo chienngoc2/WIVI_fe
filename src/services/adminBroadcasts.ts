@@ -1,5 +1,6 @@
 import { apiRequest } from '../lib/api/client'
 import type {
+  AdminBroadcastStats,
   AdminBroadcastsListResponse,
   AdminBroadcastsRawListResponse,
   CreateBroadcastRequest,
@@ -48,3 +49,8 @@ export const createBroadcast = (
     { method: 'POST', body: JSON.stringify(payload) },
     { retryUnauthorized: false },
   )
+
+export const getBroadcastStats = (
+  signal?: AbortSignal,
+): Promise<AdminBroadcastStats> =>
+  apiRequest<AdminBroadcastStats>('/admin/broadcasts/stats', { signal })

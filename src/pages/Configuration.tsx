@@ -16,6 +16,7 @@ import { DataTable } from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SectionCard } from '../components/ui/SectionCard';
 import { ApiError, isAbortError } from '../lib/api/client';
+import { formatNumber } from '../lib/format';
 import { getAiSettings, updateAiSettings } from '../services/adminAiSettings';
 import { createPlan, listPlans, updatePlan } from '../services/adminPlans';
 import type {
@@ -23,6 +24,7 @@ import type {
   AdminSubscriptionPlan,
   BillingCycle,
   CreatePlanRequest,
+  PlanBillingCycle,
   UpdateAiSettingsRequest,
   UpdatePlanRequest,
 } from '../types/admin';
@@ -33,10 +35,27 @@ const BILLING_CYCLE_OPTIONS: readonly { value: BillingCycle; label: string }[] =
   { value: 'lifetime', label: 'Trọn đời' },
 ];
 
-const BILLING_CYCLE_LABEL: Record<BillingCycle, string> = {
+const BILLING_CYCLE_LABEL: Record<PlanBillingCycle, string> = {
+  free: 'Miễn phí',
   monthly: 'Tháng',
   yearly: 'Năm',
   lifetime: 'Trọn đời',
+};
+
+/** Mặc định của backend cho gói không phải FREE (`subscription.service.ts` createPlan). */
+const DEFAULT_TOKEN_LIMIT = '10000';
+
+/** '' → null (không gửi), số nguyên ≥ -1 → số, còn lại → NaN (không hợp lệ). */
+const parseTokenLimit = (raw: string): number | null => {
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  return /^-?\d+$/.test(trimmed) && Number(trimmed) >= -1 ? Number(trimmed) : Number.NaN;
+};
+
+const formatTokenLimit = (limit: number): string => {
+  if (limit === -1) return 'Không giới hạn';
+  if (limit === 0) return 'Không có AI';
+  return formatNumber(limit);
 };
 
 export const Configuration: React.FC = () => {
@@ -125,7 +144,8 @@ export const Configuration: React.FC = () => {
     name: string;
     description: string;
     price: string;
-    billingCycle: BillingCycle;
+    billingCycle: PlanBillingCycle;
+    tokenLimit: string;
     features: string;
     isPopular: boolean;
     isActive: boolean;
@@ -137,11 +157,13 @@ export const Configuration: React.FC = () => {
     description: '',
     price: '',
     billingCycle: 'monthly',
+    tokenLimit: DEFAULT_TOKEN_LIMIT,
     features: '',
     isPopular: false,
     isActive: true,
   });
   const [planSaving, setPlanSaving] = useState(false);
+  const tokenLimitInvalid = Number.isNaN(parseTokenLimit(planForm.tokenLimit));
   const [planError, setPlanError] = useState<string | null>(null);
   const [planSuccess, setPlanSuccess] = useState<string | null>(null);
 
@@ -172,6 +194,7 @@ export const Configuration: React.FC = () => {
       description: '',
       price: '',
       billingCycle: 'monthly',
+      tokenLimit: DEFAULT_TOKEN_LIMIT,
       features: '',
       isPopular: false,
       isActive: true,
@@ -188,6 +211,7 @@ export const Configuration: React.FC = () => {
       description: plan.description ?? '',
       price: String(plan.price),
       billingCycle: plan.billingCycle,
+      tokenLimit: String(plan.tokenLimit),
       features: plan.features.join(', '),
       isPopular: plan.isPopular ?? false,
       isActive: plan.isActive,
@@ -199,6 +223,17 @@ export const Configuration: React.FC = () => {
   const handlePlanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!planForm.code.trim() || !planForm.name.trim() || !planForm.price.trim() || planSaving) return;
+
+    const tokenLimit = parseTokenLimit(planForm.tokenLimit);
+    if (tokenLimit !== null && Number.isNaN(tokenLimit)) {
+      setPlanError('Hạn mức token phải là số nguyên ≥ -1 (0 = không dùng AI, -1 = không giới hạn).');
+      return;
+    }
+    const createBillingCycle = planForm.billingCycle;
+    if (!editingPlanId && createBillingCycle === 'free') {
+      setPlanError('Không thể tạo gói với kỳ "Miễn phí". Chọn Hàng tháng, Hàng năm hoặc Trọn đời.');
+      return;
+    }
 
     setPlanSaving(true);
     setPlanError(null);
@@ -218,6 +253,7 @@ export const Configuration: React.FC = () => {
           description: planForm.description.trim() || null,
           price,
           features: features.length > 0 ? features : null,
+          tokenLimit,
           isActive: planForm.isActive,
           isPopular: planForm.isPopular,
         };
@@ -230,8 +266,9 @@ export const Configuration: React.FC = () => {
           name: planForm.name.trim(),
           description: planForm.description.trim() || null,
           price,
-          billingCycle: planForm.billingCycle,
+          billingCycle: createBillingCycle === 'free' ? 'monthly' : createBillingCycle,
           features: features.length > 0 ? features : null,
+          ...(tokenLimit !== null ? { tokenLimit } : {}),
           isPopular: planForm.isPopular,
         };
         await createPlan(createPayload);
@@ -478,6 +515,14 @@ export const Configuration: React.FC = () => {
                   ),
                 },
                 {
+                  key: 'tokenLimit',
+                  header: 'Token AI/ngày',
+                  align: 'right',
+                  render: (plan) => (
+                    <span className="font-mono tabular-nums text-ink-soft">{formatTokenLimit(plan.tokenLimit)}</span>
+                  ),
+                },
+                {
                   key: 'features',
                   header: 'Tính năng',
                   render: (plan) => (
@@ -544,7 +589,7 @@ export const Configuration: React.FC = () => {
               rowKey={(plan) => plan.id}
               empty={
                 <EmptyState
-                  colSpan={6}
+                  colSpan={7}
                   icon={<Tag size={18} />}
                   title="Chưa có gói đăng ký nào"
                   description="Backend chưa trả về gói nào. Tạo gói mới để bắt đầu."
@@ -584,6 +629,9 @@ export const Configuration: React.FC = () => {
                     className="w-full bg-surface border border-hairline rounded-control py-1.5 px-3 text-xs outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary-ring"
                     required
                   >
+                    {planForm.billingCycle === 'free' && (
+                      <option value="free" disabled>{BILLING_CYCLE_LABEL.free}</option>
+                    )}
                     {BILLING_CYCLE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
@@ -616,6 +664,29 @@ export const Configuration: React.FC = () => {
                     className="w-full bg-surface border border-hairline rounded-control py-1.5 px-3 text-xs outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary-ring font-mono"
                     required
                   />
+                </div>
+
+                {/* Token limit - số nguyên ≥ -1 */}
+                <div className="space-y-1 col-span-2">
+                  <label htmlFor="plan-token-limit" className="text-[10px] font-bold text-muted-light uppercase tracking-wider">Hạn mức token AI/ngày</label>
+                  <input
+                    id="plan-token-limit"
+                    type="number"
+                    min="-1"
+                    step="1"
+                    placeholder={`Mặc định: ${DEFAULT_TOKEN_LIMIT}`}
+                    value={planForm.tokenLimit}
+                    onChange={(e) => setPlanForm({ ...planForm, tokenLimit: e.target.value })}
+                    disabled={planSaving}
+                    aria-invalid={tokenLimitInvalid}
+                    aria-describedby="plan-token-limit-hint"
+                    className="w-full bg-surface border border-hairline rounded-control py-1.5 px-3 text-xs outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary-ring font-mono"
+                  />
+                  <p id="plan-token-limit-hint" className={`text-[9px] ${tokenLimitInvalid ? 'text-danger' : 'text-muted'}`}>
+                    {tokenLimitInvalid
+                      ? 'Phải là số nguyên ≥ -1.'
+                      : '0 = không dùng AI, -1 = không giới hạn. Để trống: tạo mới dùng mặc định backend, cập nhật giữ nguyên.'}
+                  </p>
                 </div>
               </div>
 
@@ -685,7 +756,7 @@ export const Configuration: React.FC = () => {
                 <Button variant="secondary" type="button" onClick={handlePlanCancel} disabled={planSaving}>
                   {editingPlanId ? 'Hủy' : 'Đóng'}
                 </Button>
-                <Button variant="primary" type="submit" disabled={planSaving || !planForm.code.trim() || !planForm.name.trim() || !planForm.price.trim()}>
+                <Button variant="primary" type="submit" disabled={planSaving || tokenLimitInvalid || !planForm.code.trim() || !planForm.name.trim() || !planForm.price.trim()}>
                   {planSaving ? (
                     <>
                       <RefreshIcon size={12} className="animate-spin" />

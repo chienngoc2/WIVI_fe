@@ -8,8 +8,8 @@ export const Sidebar: React.FC<{ overview?: boolean }> = ({ overview = false }) 
     { label: 'Tổng quan', icon: <SquaresFour weight="regular" size={20} />, to: '/' },
     { label: 'Thành viên', icon: <Users weight="regular" size={20} />, to: '/members' },
     { label: 'Đánh giá người dùng', icon: <Star weight="regular" size={20} />, to: '/feedbacks' },
-    { label: 'Nhật ký giao dịch', icon: <ArrowsLeftRight weight="regular" size={20} />, to: '/activity' },
-    { label: 'Hệ thống AI & Sepay', icon: <Brain weight="regular" size={20} />, to: '/intelligence' },
+    { label: 'Sổ cái mua gói', icon: <ArrowsLeftRight weight="regular" size={20} />, to: '/activity' },
+    { label: 'Vận hành AI & SePay', icon: <Brain weight="regular" size={20} />, to: '/intelligence' },
     { label: 'Chiến dịch gửi tin', icon: <Megaphone weight="regular" size={20} />, to: '/campaigns' },
     { label: 'Cấu hình hệ thống', icon: <Sliders weight="regular" size={20} />, to: '/configuration' },
   ];

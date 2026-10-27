@@ -155,6 +155,7 @@ export interface AdminBroadcast {
   sentAt: string | null
   targetCount: number
   deliveredCount: number
+  readCount: number
 }
 
 /** Response thô của `/admin/broadcasts`: shape phẳng, không serialize getter `totalPages`. */
@@ -226,7 +227,17 @@ export interface UpdateAiSettingsRequest {
 /* Stage 5 — Subscription plans (`/api/v1/admin/subscriptions/plans`)        */
 /* -------------------------------------------------------------------------- */
 
+/** Chu kỳ được phép gửi khi tạo gói (`@IsIn` phân biệt hoa thường → phải viết thường). */
 export type BillingCycle = 'monthly' | 'yearly' | 'lifetime'
+
+/** Chu kỳ backend có thể trả về; `free` chỉ có ở gói seed `FREE`, không tạo được qua API. */
+export type PlanBillingCycle = BillingCycle | 'free'
+
+/**
+ * Hạn mức token AI/ngày (`token_limit` int):
+ * `0` = không dùng AI, `-1` = không giới hạn, `> 0` = số token.
+ */
+export type PlanTokenLimit = number
 
 export interface AdminSubscriptionPlan {
   id: string
@@ -234,8 +245,9 @@ export interface AdminSubscriptionPlan {
   code: string
   price: number
   currency: string
-  billingCycle: BillingCycle
+  billingCycle: PlanBillingCycle
   features: string[]
+  tokenLimit: PlanTokenLimit
   isActive: boolean
   isPopular?: boolean
   description?: string | null
@@ -251,6 +263,8 @@ export interface CreatePlanRequest {
   price: number
   billingCycle: BillingCycle
   features?: string[] | null
+  /** Bỏ trống → backend dùng mặc định (FREE = 0, gói khác = 10000). Số nguyên ≥ -1. */
+  tokenLimit?: PlanTokenLimit | null
   isPopular?: boolean | null
 }
 
@@ -259,9 +273,20 @@ export interface UpdatePlanRequest {
   description?: string | null
   price?: number | null
   features?: string[] | null
+  /** `null`/bỏ trống → giữ nguyên. Số nguyên ≥ -1. */
+  tokenLimit?: PlanTokenLimit | null
   isActive?: boolean | null
   isPopular?: boolean | null
   // code và billingCycle không được phép đổi
+}
+
+/**
+ * Runtime: PATCH trả `{ message, plan }` (`subscription.service.ts` updatePlan),
+ * không phải plan phẳng như `API V2.md` cũ mô tả. POST trả plan phẳng.
+ */
+export interface UpdatePlanResponse {
+  message: string
+  plan: AdminSubscriptionPlan
 }
 
 /* -------------------------------------------------------------------------- */
@@ -332,3 +357,180 @@ export interface AdminDashboardResponse {
   recentUsers: AdminDashboardRecentUser[]
   recentTransactions: AdminDashboardRecentTransaction[]
 }
+
+/* -------------------------------------------------------------------------- */
+/* Real-Data Plan (Report Ranges, Orders, Revenue, Trends, AI & SePay Stats)  */
+/* -------------------------------------------------------------------------- */
+
+export type ReportGranularity = 'day' | 'month'
+
+export interface AdminReportRange {
+  fromDate: string
+  toDate: string
+  granularity: ReportGranularity
+  timezone: string
+}
+
+export interface RegistrationPoint {
+  period: string
+  registrations: number
+}
+
+export interface RegistrationSeriesResponse extends AdminReportRange {
+  totalRegistrations: number
+  points: RegistrationPoint[]
+}
+
+export interface FeedbackTrendPoint {
+  period: string
+  submissions: number
+  uniqueUsers: number
+  averageRating: number | null
+}
+
+export interface FeedbackTrendResponse extends AdminReportRange {
+  totalSubmissions: number
+  points: FeedbackTrendPoint[]
+}
+
+export type AdminPaymentOrderStatus = 'Pending' | 'Paid' | 'Failed' | 'Cancelled'
+
+export interface AdminPaymentOrder {
+  id: string
+  orderCode: string
+  userId: string
+  userName: string | null
+  email: string | null
+  planId: string
+  planName: string | null
+  billingCycle: string | null
+  amount: number
+  currency: string
+  status: AdminPaymentOrderStatus
+  confirmationSource: 'SePay' | 'Manual' | null
+  sepayTransactionId: string | null
+  paymentMethod: string
+  createdAt: string
+  paidAt: string | null
+}
+
+export interface AdminPaymentOrdersResponse {
+  items: AdminPaymentOrder[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
+export interface RevenuePoint {
+  period: string
+  revenue: number
+  paidOrders: number
+}
+
+export interface RevenueByPlan {
+  planId: string
+  planName: string | null
+  paidOrders: number
+  revenue: number
+}
+
+export interface AdminRevenueReport extends AdminReportRange {
+  currency: 'VND'
+  totalRevenue: number | null
+  paidOrders: number | null
+  manualPaidOrders: number | null
+  pendingOrders: number
+  activePaidSubscriptions: number
+  byPlan: RevenueByPlan[]
+  points: RevenuePoint[]
+}
+
+export interface AdminBroadcastStats {
+  totalBroadcasts: number
+  queuedBroadcasts: number
+  sentBroadcasts: number
+  failedBroadcasts: number
+  totalDelivered: number
+  totalRead: number
+  readRate: number | null
+}
+
+export type AiUsageProvider = 'GroqPrimary' | 'GroqSecondary' | 'Gemini' | 'RuleBased'
+
+export type AiFallbackReason =
+  | 'OutOfScope'
+  | 'ContextUnavailable'
+  | 'AiDisabled'
+  | 'QuotaExceeded'
+  | 'ProviderError'
+  | 'InvalidOutput'
+
+export interface AiUsageTotals {
+  requests: number
+  successRequests: number
+  fallbackRequests: number
+  totalTokens: number
+  uniqueUsers: number
+}
+
+export interface AiUsageByProvider {
+  provider: AiUsageProvider
+  requests: number
+  totalTokens: number
+}
+
+export interface AiUsageFallbackReasonItem {
+  reason: AiFallbackReason
+  count: number
+}
+
+export interface AiUsagePoint {
+  period: string
+  requests: number
+  totalTokens: number
+  fallbackRequests: number
+}
+
+export interface AiUsageTopUser {
+  userId: string
+  userName: string | null
+  email: string | null
+  requests: number
+  totalTokens: number
+}
+
+export interface AdminAiUsageReport extends AdminReportRange {
+  trackingStartedAt: string | null
+  totals: AiUsageTotals
+  byProvider: AiUsageByProvider[]
+  fallbackReasons: AiUsageFallbackReasonItem[]
+  points: AiUsagePoint[]
+  topUsers: AiUsageTopUser[]
+  today: {
+    date: string
+    totalTokens: number
+    systemDailyLimit: number | null
+  }
+}
+
+export interface SepayWebhookStatusCount {
+  status: 'Processed' | 'Pending' | 'Failed' | 'Ignored'
+  count: number
+}
+
+export interface SepayWebhookPoint {
+  period: string
+  received: number
+  failed: number
+}
+
+export interface AdminSepayStats extends AdminReportRange {
+  bankWebhooks: {
+    total: number
+    byStatus: SepayWebhookStatusCount[]
+    points: SepayWebhookPoint[]
+  }
+  linkedBankAccounts: number
+  lastWebhookAt: string | null
+}
+

@@ -1,11 +1,12 @@
 import React from 'react';
 import { MagnifyingGlass, Bell, Terminal } from '@phosphor-icons/react';
+import { AccountMenu } from './AccountMenu';
 
-export const TopNav: React.FC = () => {
+export const TopNav: React.FC<{ overview?: boolean }> = ({ overview = false }) => {
   return (
-    <header className="h-14 bg-white border-b border-border-premium flex items-center justify-between px-6 z-10 select-none">
+    <header className={`h-14 shrink-0 bg-white border-b border-border-premium flex items-center justify-between z-10 select-none ${overview ? 'gap-3 px-4 md:px-6' : 'px-6'}`}>
       {/* Search Input Box */}
-      <div className="flex-1 max-w-md">
+      {overview ? <span className="min-w-0 truncate text-xs text-muted">Không gian quản trị</span> : <div className="flex-1 max-w-md">
         <div className="relative group">
           <MagnifyingGlass 
             className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" 
@@ -17,10 +18,11 @@ export const TopNav: React.FC = () => {
             className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-primary/20 focus:ring-2 focus:ring-primary/10 rounded-lg py-1.5 pl-9 pr-4 outline-none transition-all text-xs text-gray-800 placeholder-gray-400"
           />
         </div>
-      </div>
+      </div>}
       
       {/* Navigation Right Actions */}
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-4">
+        {!overview && <>
         {/* API Engine Status Ticker */}
         <div className="hidden md:flex items-center gap-2 bg-gray-50 px-2.5 py-1 rounded-md border border-border-premium">
           <Terminal size={14} className="text-gray-400" />
@@ -33,17 +35,10 @@ export const TopNav: React.FC = () => {
         </button>
 
         <div className="h-4 w-px bg-gray-200"></div>
+        </>}
 
         {/* Admin profile detail */}
-        <div className="flex items-center gap-2.5">
-          <div className="text-right">
-            <p className="text-xs font-semibold text-gray-900 leading-tight">Nicholas Gray</p>
-            <p className="text-[10px] text-gray-400 font-mono leading-none">Giám đốc Vận hành</p>
-          </div>
-          <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-display text-xs font-bold text-primary shadow-inner">
-            NG
-          </div>
-        </div>
+        <AccountMenu />
       </div>
     </header>
   );

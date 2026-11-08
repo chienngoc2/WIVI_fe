@@ -1,297 +1,644 @@
-import React, { useState, useMemo } from 'react';
-import { CurrencyDollar, CheckCircle, Warning, UserPlus, ShoppingBag, Coffee, Car, ForkKnife, GameController, MagnifyingGlass, Receipt, CreditCard } from '@phosphor-icons/react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, Tooltip } from 'recharts';
+import React, { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import {
+  ArrowClockwise,
+  CreditCard,
+  Receipt,
+  WarningCircle,
+} from '@phosphor-icons/react'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { DataTable, type Column } from '../components/ui/DataTable'
+import { DateRangeFilter } from '../components/ui/DateRangeFilter'
+import { EmptyState } from '../components/ui/EmptyState'
+import { SearchInput } from '../components/ui/SearchInput'
+import { SectionCard } from '../components/ui/SectionCard'
+import { TimeSeriesChart } from '../components/charts/TimeSeriesChart'
+import { useReportRange } from '../hooks/useReportRange'
+import { ApiError, isAbortError } from '../lib/api/client'
+import { formatDateTime, formatNumber, formatVnd } from '../lib/format'
+import { listPlans } from '../services/adminPlans'
+import { getRevenueReport, listPaymentOrders } from '../services/adminRevenue'
+import { chartTheme } from '../theme/chart'
+import type {
+  AdminPaymentOrder,
+  AdminPaymentOrdersResponse,
+  AdminPaymentOrderStatus,
+  AdminRevenueReport,
+  AdminSubscriptionPlan,
+} from '../types/admin'
 
-const revenueData = [
-  { name: '12/06', rev: 18200 },
-  { name: '13/06', rev: 22400 },
-  { name: '14/06', rev: 19500 },
-  { name: '15/06', rev: 24100 },
-  { name: '16/06', rev: 28900 },
-  { name: '17/06', rev: 32400 },
-  { name: '18/06', rev: 30800 },
-];
+interface Snapshot<T> {
+  key: string
+  data: T | null
+  error: string | null
+}
 
-const customerTransactions = [
-  { id: 'TX-9011', customer: 'Nguyễn Văn A', category: 'Coffee', amount: '35.000 đ', date: '18/06 12:44', method: 'Ví Momo', status: 'Thành công' },
-  { id: 'TX-8924', customer: 'Trần Thị B', category: 'Food', amount: '120.000 đ', date: '18/06 11:30', method: 'Chuyển khoản QR', status: 'Thành công' },
-  { id: 'TX-8910', customer: 'Phạm Minh C', category: 'Food', amount: '450.000 đ', date: '18/06 10:15', method: 'Visa *4812', status: 'Chờ xử lý' },
-  { id: 'TX-8742', customer: 'Lê Hoàng D', category: 'Shopping', amount: '1.250.000 đ', date: '17/06 18:22', method: 'Thẻ tín dụng', status: 'Thành công' },
-  { id: 'TX-8622', customer: 'Hoàng Văn E', category: 'Entertainment', amount: '120.000 đ', date: '17/06 14:05', method: 'Ví Momo', status: 'Thành công' },
-  { id: 'TX-8591', customer: 'Vũ Minh F', category: 'Transportation', amount: '62.000 đ', date: '17/06 09:40', method: 'Chuyển khoản QR', status: 'Thành công' },
-];
+const positiveInteger = (value: string | null, fallback: number) => {
+  const num = Number(value)
+  return Number.isSafeInteger(num) && num > 0 ? num : fallback
+}
 
-const subscriptionTransactions = [
-  { id: 'SPY-4091', customer: 'Nguyễn Văn A', plan: 'Gói Pro (1 năm)', paid: '990.000 đ', date: '18/06 12:10', renewal: '18/06/2027', status: 'Thành công' },
-  { id: 'SPY-4090', customer: 'Trần Thị B', plan: 'Gói Premium (6 tháng)', paid: '300.000 đ', date: '18/06 08:30', renewal: '18/12/2026', status: 'Thành công' },
-  { id: 'SPY-4089', customer: 'Phạm Minh C', plan: 'Gói Pro (1 năm)', paid: '990.000 đ', date: '17/06 17:15', renewal: '17/06/2027', status: 'Thành công' },
-  { id: 'SPY-4088', customer: 'Lê Hoàng D', plan: 'Gói Pro (1 năm)', paid: '990.000 đ', date: '17/06 15:44', renewal: '17/06/2027', status: 'Thành công' },
-  { id: 'SPY-4087', customer: 'Hoàng Văn E', plan: 'Gói Basic (1 tháng)', paid: '29.000 đ', date: '12/06 11:20', renewal: '12/07/2026', status: 'Thành công' },
-  { id: 'SPY-4086', customer: 'Vũ Minh F', plan: 'Gói Premium (6 tháng)', paid: '300.000 đ', date: '10/06 14:50', renewal: '10/12/2026', status: 'Thành công' },
-  { id: 'SPY-4085', customer: 'Lê Văn G', plan: 'Gói Premium (1 tháng)', paid: '59.000 đ', date: '15/06 09:15', renewal: '15/07/2026', status: 'Thành công' },
-];
+const loadError = (error: unknown, fallback: string): string =>
+  error instanceof ApiError && error.status === 403
+    ? 'Bạn không có quyền xem dữ liệu này.'
+    : fallback
 
-const categoryIcons: Record<string, React.ReactNode> = {
-  Coffee: <Coffee size={12} className="text-amber-500" />,
-  Transportation: <Car size={12} className="text-blue-500" />,
-  Food: <ForkKnife size={12} className="text-emerald-500" />,
-  Shopping: <ShoppingBag size={12} className="text-purple-500" />,
-  Entertainment: <GameController size={12} className="text-pink-500" />,
-};
+const statusBadge = (status: AdminPaymentOrderStatus) => {
+  switch (status) {
+    case 'Paid':
+      return <Badge tone="success">Đã thanh toán</Badge>
+    case 'Pending':
+      return <Badge tone="warning">Chờ thanh toán</Badge>
+    case 'Failed':
+      return <Badge tone="danger">Thất bại</Badge>
+    case 'Cancelled':
+      return <Badge tone="neutral">Đã hủy</Badge>
+    default:
+      return <Badge tone="neutral">{status}</Badge>
+  }
+}
 
 export const Activity: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'spending' | 'subscription'>('spending');
-  const [search, setSearch] = useState('');
+  const [params, setParams] = useSearchParams()
+  const { fromDate, toDate, error: rangeError, setRange } = useReportRange({
+    mode: 'required',
+  })
 
-  // Filter spending transactions
-  const filteredSpending = useMemo(() => {
-    return customerTransactions.filter(tx => 
-      tx.customer.toLowerCase().includes(search.toLowerCase()) ||
-      tx.id.toLowerCase().includes(search.toLowerCase()) ||
-      tx.category.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [search]);
+  const [version, setVersion] = useState(0)
+  const [keyword, setKeyword] = useState('')
+  const [search, setSearch] = useState('')
 
-  // Filter subscription transactions
-  const filteredSubscriptions = useMemo(() => {
-    return subscriptionTransactions.filter(sub => 
-      sub.customer.toLowerCase().includes(search.toLowerCase()) ||
-      sub.id.toLowerCase().includes(search.toLowerCase()) ||
-      sub.plan.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [search]);
+  const page = positiveInteger(params.get('page'), 1)
+  const pageSize = Math.min(100, positiveInteger(params.get('pageSize'), 20))
+  const statusParam = (params.get('status') as AdminPaymentOrderStatus) || null
+  const planIdParam = params.get('planId') || null
+
+  const [plans, setPlans] = useState<AdminSubscriptionPlan[]>([])
+
+  const [revenueSnapshot, setRevenueSnapshot] =
+    useState<Snapshot<AdminRevenueReport> | null>(null)
+  const [ordersSnapshot, setOrdersSnapshot] =
+    useState<Snapshot<AdminPaymentOrdersResponse> | null>(null)
+
+  // Debounce search
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(keyword.trim()), 350)
+    return () => window.clearTimeout(timer)
+  }, [keyword])
+
+  // Load plans for filter dropdown
+  useEffect(() => {
+    const controller = new AbortController()
+    listPlans(controller.signal)
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setPlans(Array.isArray(data) ? data : [])
+        }
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [])
+
+  const revenueKey = JSON.stringify([fromDate, toDate, version])
+  const ordersKey = JSON.stringify([
+    page,
+    pageSize,
+    statusParam,
+    planIdParam,
+    search,
+    fromDate,
+    toDate,
+    version,
+  ])
+
+  const currentRevenue =
+    revenueSnapshot?.key === revenueKey ? revenueSnapshot : null
+  const currentOrders =
+    ordersSnapshot?.key === ordersKey ? ordersSnapshot : null
+
+  const revenueLoading = currentRevenue === null && !rangeError
+  const ordersLoading = currentOrders === null && !rangeError
+
+  // Fetch Revenue Report
+  useEffect(() => {
+    if (rangeError) return
+
+    const controller = new AbortController()
+    getRevenueReport({ fromDate, toDate, signal: controller.signal })
+      .then((res) => {
+        if (!controller.signal.aborted) {
+          setRevenueSnapshot({ key: revenueKey, data: res, error: null })
+        }
+      })
+      .catch((err: unknown) => {
+        if (!controller.signal.aborted && !isAbortError(err)) {
+          setRevenueSnapshot({
+            key: revenueKey,
+            data: null,
+            error: loadError(err, 'Không tải được báo cáo doanh thu'),
+          })
+        }
+      })
+
+    return () => controller.abort()
+  }, [fromDate, toDate, rangeError, revenueKey])
+
+  // Fetch Orders List
+  useEffect(() => {
+    if (rangeError) return
+
+    const controller = new AbortController()
+    listPaymentOrders({
+      page,
+      pageSize,
+      status: statusParam,
+      planId: planIdParam,
+      keyword: search || null,
+      fromDate: fromDate || null,
+      toDate: toDate || null,
+      signal: controller.signal,
+    })
+      .then((res) => {
+        if (!controller.signal.aborted) {
+          setOrdersSnapshot({ key: ordersKey, data: res, error: null })
+        }
+      })
+      .catch((err: unknown) => {
+        if (!controller.signal.aborted && !isAbortError(err)) {
+          setOrdersSnapshot({
+            key: ordersKey,
+            data: null,
+            error: loadError(err, 'Không tải được danh sách đơn hàng'),
+          })
+        }
+      })
+
+    return () => controller.abort()
+  }, [
+    page,
+    pageSize,
+    statusParam,
+    planIdParam,
+    search,
+    fromDate,
+    toDate,
+    rangeError,
+    ordersKey,
+  ])
+
+  const refreshAll = () => setVersion((v) => v + 1)
+
+  const updateParam = (key: string, value: string | null) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (value) next.set(key, value)
+      else next.delete(key)
+      next.set('page', '1')
+      return next
+    })
+  }
+
+  const setPage = (nextPage: number) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('page', String(nextPage))
+      return next
+    })
+  }
+
+  const revenueReport = currentRevenue?.data ?? null
+  const ordersResponse = currentOrders?.data ?? null
+  const orders = ordersResponse?.items ?? []
+  const totalOrders = ordersResponse?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalOrders / pageSize))
+
+  const columns: Column<AdminPaymentOrder>[] = useMemo(
+    () => [
+      {
+        key: 'orderCode',
+        header: 'Mã đơn',
+        render: (row) => (
+          <span className="font-mono font-semibold text-ink">
+            {row.orderCode}
+          </span>
+        ),
+      },
+      {
+        key: 'user',
+        header: 'Thành viên',
+        render: (row) => (
+          <div>
+            <span className="block font-medium text-ink">
+              {row.userName ?? row.userId}
+            </span>
+            {row.email && (
+              <span className="block text-[11px] text-muted">{row.email}</span>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'plan',
+        header: 'Gói',
+        render: (row) => (
+          <span>{row.planName ?? row.planId ?? '—'}</span>
+        ),
+      },
+      {
+        key: 'amount',
+        header: 'Số tiền',
+        render: (row) => (
+          <span className="font-mono font-bold text-ink">
+            {formatVnd(row.amount)}
+          </span>
+        ),
+      },
+      {
+        key: 'status',
+        header: 'Trạng thái',
+        render: (row) => statusBadge(row.status),
+      },
+      {
+        key: 'source',
+        header: 'Xác nhận',
+        render: (row) =>
+          row.confirmationSource === 'SePay' ? (
+            <span className="font-semibold text-primary">SePay</span>
+          ) : row.confirmationSource === 'Manual' ? (
+            <span className="text-muted">Thủ công</span>
+          ) : (
+            <span className="text-muted-light">—</span>
+          ),
+      },
+      {
+        key: 'createdAt',
+        header: 'Tạo lúc',
+        render: (row) => (
+          <span className="text-muted">{formatDateTime(row.createdAt)}</span>
+        ),
+      },
+      {
+        key: 'paidAt',
+        header: 'Thanh toán lúc',
+        render: (row) => (
+          <span className="text-muted">{formatDateTime(row.paidAt)}</span>
+        ),
+      },
+    ],
+    [],
+  )
+
+  const fieldClass =
+    'h-8 px-2.5 text-xs bg-surface border border-hairline rounded-control text-ink focus:outline-none focus:ring-1 focus:ring-primary'
 
   return (
-    <div className="h-full flex flex-col justify-between gap-5 max-w-7xl mx-auto select-none w-full text-xs">
-      {/* Title Header */}
-      <div className="flex justify-between items-center h-10 px-1">
-        <div>
-          <h1 className="text-xl font-bold font-display text-gray-900 tracking-tight">Sổ Cái & Giao Dịch Hệ Thống</h1>
-          <p className="text-[11px] text-gray-500 font-medium">Báo cáo doanh thu nâng cấp gói cước và dòng tiền chi tiêu của người dùng.</p>
+    <div
+      data-testid="activity-page"
+      className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-4 pb-4 text-xs lg:gap-6"
+    >
+      {/* 1. Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-xl font-bold tracking-tight text-ink">
+            Sổ cái mua gói
+          </h1>
+          <p className="mt-1 text-xs text-muted">
+            Lịch sử thanh toán gói cước qua SePay và doanh thu đã xác nhận.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <DateRangeFilter
+            fromDate={fromDate}
+            toDate={toDate}
+            error={rangeError}
+            onChange={setRange}
+          />
+          <Button
+            variant="secondary"
+            icon={<ArrowClockwise size={14} />}
+            disabled={revenueLoading || ordersLoading}
+            onClick={refreshAll}
+          >
+            Làm mới
+          </Button>
         </div>
       </div>
 
-      {/* Top KPIs Row - Total Revenue, New Subscriptions, Renewals, Failed Payments */}
-      <div className="grid grid-cols-4 gap-6">
-        {[
-          { label: 'Tổng doanh thu MTD', val: '642,8M đ', note: 'Tháng này +19.5%', icon: <CurrencyDollar size={18} className="text-success" /> },
-          { label: 'Số lượt đăng ký mới', val: '840 thành viên', note: 'Trong chu kỳ hiện tại', icon: <UserPlus size={18} className="text-primary" /> },
-          { label: 'Số lượt gia hạn gói', val: '2,482 hóa đơn', note: 'Tỷ lệ giữ chân 98.2%', icon: <CheckCircle size={18} className="text-emerald-500" /> },
-          { label: 'Giao dịch lỗi', val: '12 hóa đơn', note: 'Đã gửi mail nhắc nợ tự động', icon: <Warning size={18} className="text-danger" /> },
-        ].map((kpi, idx) => (
-          <div key={idx} className="bg-white p-3.5 rounded-2xl border border-border-premium shadow-premium-sm flex justify-between items-center h-[75px]">
-            <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{kpi.label}</span>
-              <span className="text-base font-bold text-gray-900 mt-1">{kpi.val}</span>
-              <span className="text-[9px] font-mono text-gray-400 mt-0.5">{kpi.note}</span>
-            </div>
-            <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center border border-border-premium">
-              {kpi.icon}
-            </div>
+      {/* 2. 4 KPI Tiles */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SectionCard className="p-4" padded={false}>
+          <div className="p-4">
+            <span className="text-xs font-semibold text-muted">
+              Doanh thu đã xác nhận
+            </span>
+            <p className="mt-1 font-mono text-2xl font-bold tracking-tight text-ink">
+              {formatVnd(revenueReport?.totalRevenue)}
+            </p>
+            <span className="mt-1 block text-[11px] text-muted">
+              Doanh thu SePay đã đối soát
+            </span>
           </div>
-        ))}
+        </SectionCard>
+
+        <SectionCard className="p-4" padded={false}>
+          <div className="p-4">
+            <span className="text-xs font-semibold text-muted">
+              Đơn đã thanh toán
+            </span>
+            <p className="mt-1 font-mono text-2xl font-bold tracking-tight text-ink">
+              {revenueReport?.paidOrders !== null &&
+              revenueReport?.paidOrders !== undefined
+                ? formatNumber(revenueReport.paidOrders)
+                : '—'}
+            </p>
+            <span className="mt-1 block text-[11px] text-muted">
+              {revenueReport && (revenueReport.manualPaidOrders ?? 0) > 0
+                ? `+ ${formatNumber(revenueReport.manualPaidOrders)} đơn xác nhận thủ công`
+                : 'Xác nhận tự động qua SePay'}
+            </span>
+          </div>
+        </SectionCard>
+
+        <SectionCard className="p-4" padded={false}>
+          <div className="p-4">
+            <span className="text-xs font-semibold text-muted">
+              Đơn chờ thanh toán
+            </span>
+            <p className="mt-1 font-mono text-2xl font-bold tracking-tight text-ink">
+              {formatNumber(revenueReport?.pendingOrders)}
+            </p>
+            <span className="mt-1 block text-[11px] text-muted">
+              Đang chờ giao dịch SePay
+            </span>
+          </div>
+        </SectionCard>
+
+        <SectionCard className="p-4" padded={false}>
+          <div className="p-4">
+            <span className="text-xs font-semibold text-muted">
+              Đang dùng gói trả phí
+            </span>
+            <p className="mt-1 font-mono text-2xl font-bold tracking-tight text-ink">
+              {formatNumber(revenueReport?.activePaidSubscriptions)}
+            </p>
+            <span className="mt-1 block text-[11px] text-muted">
+              Tại thời điểm hiện tại
+            </span>
+          </div>
+        </SectionCard>
       </div>
 
-      {/* Tabbed Transaction Ledgers Card - Takes full-width */}
-      <div className="bg-white rounded-2xl border border-border-premium shadow-premium flex flex-col h-[300px] overflow-hidden">
-        
-        {/* Section Header Controls */}
-        <div className="px-4 py-2.5 border-b border-border-premium flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/40">
-          {/* Tab switches */}
-          <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-border-premium">
-            <button
-              onClick={() => {
-                setActiveTab('spending');
-                setSearch('');
-              }}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                activeTab === 'spending'
-                  ? 'bg-white text-gray-900 shadow-premium-sm'
-                  : 'text-gray-500 hover:text-gray-950'
-              }`}
+      {/* 3. Row 2: Revenue Trend Area Chart + Revenue By Plan */}
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6">
+        <SectionCard
+          title="Tốc độ tăng trưởng doanh thu"
+          subtitle="Doanh thu và số lượng đơn thanh toán theo thời gian"
+          className="min-w-0"
+        >
+          {revenueLoading ? (
+            <div
+              role="status"
+              className="flex h-64 items-center justify-center text-muted animate-pulse"
             >
-              <CreditCard size={14} />
-              Dòng tiền chi tiêu
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('subscription');
-                setSearch('');
-              }}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                activeTab === 'subscription'
-                  ? 'bg-white text-gray-900 shadow-premium-sm'
-                  : 'text-gray-500 hover:text-gray-950'
-              }`}
-            >
-              <Receipt size={14} />
-              Sổ cái mua gói (Cổng Sepay)
-            </button>
-          </div>
+              Đang tải tăng trưởng doanh thu…
+            </div>
+          ) : currentRevenue?.error ? (
+            <div role="alert">
+              <EmptyState
+                icon={<WarningCircle size={20} />}
+                title={currentRevenue.error}
+                action={
+                  <Button variant="secondary" onClick={refreshAll}>
+                    Thử lại
+                  </Button>
+                }
+              />
+            </div>
+          ) : (revenueReport?.points?.length ?? 0) === 0 ? (
+            <EmptyState
+              icon={<CreditCard size={20} />}
+              title="Chưa có dữ liệu doanh thu"
+              description="Chưa có giao dịch thanh toán nào được xác nhận trong khoảng thời gian này."
+            />
+          ) : (
+            <TimeSeriesChart
+              data={revenueReport!.points}
+              xKey="period"
+              granularity={revenueReport!.granularity}
+              variant="area"
+              series={[
+                {
+                  key: 'revenue',
+                  label: 'Doanh thu (đ)',
+                  axis: 'left',
+                  format: (v) => formatVnd(v),
+                },
+                {
+                  key: 'paidOrders',
+                  label: 'Số đơn',
+                  axis: 'right',
+                  color: chartTheme.series[1],
+                  format: (v) => `${formatNumber(v)} đơn`,
+                },
+              ]}
+              height={280}
+              ariaLabel="Biểu đồ tốc độ tăng trưởng doanh thu"
+            />
+          )}
+        </SectionCard>
 
-          {/* Quick search input */}
-          <div className="relative w-full sm:max-w-xs">
-            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-            <input
-              type="text"
-              placeholder={activeTab === 'spending' ? "Tìm chi tiêu, thành viên..." : "Tìm hóa đơn, gói mua, tên..."}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white border border-border-premium focus:border-primary/30 focus:ring-2 focus:ring-primary/10 rounded-lg py-1.5 pl-9 pr-4 outline-none transition-all text-xs"
+        <SectionCard
+          title="Doanh thu theo gói"
+          subtitle="Tỷ trọng doanh thu theo từng gói đăng ký"
+          className="min-w-0"
+        >
+          {revenueLoading ? (
+            <div
+              role="status"
+              className="flex h-64 items-center justify-center text-muted animate-pulse"
+            >
+              Đang tải cơ cấu gói…
+            </div>
+          ) : (revenueReport?.byPlan?.length ?? 0) === 0 ? (
+            <EmptyState
+              icon={<Receipt size={20} />}
+              title="Chưa có doanh thu theo gói"
+              description="Không có đơn mua gói nào hoàn tất trong khoảng này."
+            />
+          ) : (
+            <div className="flex flex-col gap-3 py-1">
+              {revenueReport!.byPlan.map((plan, index) => {
+                const total = revenueReport!.totalRevenue || 1
+                const percent = Math.min(
+                  100,
+                  Math.round((plan.revenue / total) * 100),
+                )
+                const color =
+                  chartTheme.series[index % chartTheme.series.length]
+
+                return (
+                  <div key={plan.planId} className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-ink truncate max-w-[150px]">
+                        {plan.planName || plan.planId}
+                      </span>
+                      <span className="font-mono text-ink-soft">
+                        {formatVnd(plan.revenue)}{' '}
+                        <span className="text-[11px] text-muted">
+                          ({formatNumber(plan.paidOrders)} đơn)
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-pill bg-surface-alt overflow-hidden">
+                      <div
+                        className="h-full rounded-pill transition-all duration-300"
+                        style={{
+                          width: `${percent}%`,
+                          backgroundColor: color,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </SectionCard>
+      </div>
+
+      {/* 4. Row 3: Payment Orders Table */}
+      <SectionCard
+        title="Lịch sử mua gói"
+        subtitle="Lọc theo ngày tạo đơn và trạng thái giao dịch"
+        className="min-w-0"
+        padded={false}
+      >
+        {/* Table Filters */}
+        <div className="p-4 border-b border-border-premium flex flex-wrap items-center gap-3">
+          <div className="w-full sm:w-64">
+            <SearchInput
+              value={keyword}
+              onChange={setKeyword}
+              placeholder="Mã đơn hoặc mã giao dịch SePay…"
             />
           </div>
-        </div>
 
-        {/* Tab Content Table */}
-        <div className="flex-1 overflow-y-auto scrollbar-premium">
-          {activeTab === 'spending' ? (
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-border-premium bg-gray-50/10 text-[9px] uppercase font-bold text-gray-400 tracking-wider">
-                  <th className="py-2 px-3">Mã GD</th>
-                  <th className="py-2 px-3">Thành viên</th>
-                  <th className="py-2 px-3">Phân mục</th>
-                  <th className="py-2 px-3">Số tiền</th>
-                  <th className="py-2 px-3">Thời gian</th>
-                  <th className="py-2 px-3">Phương thức</th>
-                  <th className="py-2 px-4 text-right">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-700">
-                {filteredSpending.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-10 text-center text-gray-400">
-                      Không tìm thấy giao dịch chi tiêu phù hợp.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredSpending.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-gray-50/50">
-                      <td className="py-2 px-3 font-mono font-medium text-[10px] text-gray-500">{tx.id}</td>
-                      <td className="py-2 px-3 font-semibold text-gray-800">{tx.customer}</td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-1">
-                          {categoryIcons[tx.category]}
-                          <span>{tx.category === 'Coffee' ? 'Cà phê' : tx.category === 'Food' ? 'Ăn uống' : tx.category === 'Shopping' ? 'Mua sắm' : tx.category === 'Entertainment' ? 'Giải trí' : 'Di chuyển'}</span>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3 font-mono font-bold text-gray-800">{tx.amount}</td>
-                      <td className="py-2 px-3 font-mono text-[10px] text-gray-450">{tx.date}</td>
-                      <td className="py-2 px-3 text-gray-500">{tx.method}</td>
-                      <td className="py-2 px-4 text-right">
-                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold font-mono ${
-                          tx.status === 'Thành công' ? 'bg-[#10B981]/10 text-success' : 'bg-amber-500/10 text-amber-500'
-                        }`}>
-                          {tx.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-border-premium bg-gray-50/10 text-[9px] uppercase font-bold text-gray-400 tracking-wider">
-                  <th className="py-2 px-3">Mã Sepay QR</th>
-                  <th className="py-2 px-3">Thành viên</th>
-                  <th className="py-2 px-3">Gói mua</th>
-                  <th className="py-2 px-3">Thành tiền</th>
-                  <th className="py-2 px-3">Ngày giao dịch</th>
-                  <th className="py-2 px-3">Hạn gia hạn</th>
-                  <th className="py-2 px-4 text-right">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-700">
-                {filteredSubscriptions.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-10 text-center text-gray-400">
-                      Không tìm thấy lịch sử hóa đơn mua gói phù hợp.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredSubscriptions.map((sub) => (
-                    <tr key={sub.id} className="hover:bg-gray-50/50">
-                      <td className="py-2 px-3 font-mono font-medium text-[10px] text-gray-500">{sub.id}</td>
-                      <td className="py-2 px-3 font-semibold text-gray-800">{sub.customer}</td>
-                      <td className="py-2 px-3">
-                        <span className="px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 font-semibold text-[9px]">
-                          {sub.plan}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 font-mono font-bold text-emerald-600">{sub.paid}</td>
-                      <td className="py-2 px-3 font-mono text-[10px] text-gray-450">{sub.date}</td>
-                      <td className="py-2 px-3 font-mono text-[10px] text-gray-450">{sub.renewal}</td>
-                      <td className="py-2 px-4 text-right">
-                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold font-mono ${
-                          sub.status === 'Active' || sub.status === 'Thành công' ? 'bg-[#10B981]/10 text-success' : 'bg-red-500/10 text-red-500 border border-red-200'
-                        }`}>
-                          {sub.status === 'Active' || sub.status === 'Thành công' ? 'Thành công' : 'Thất bại'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <select
+            aria-label="Lọc theo trạng thái"
+            className={fieldClass}
+            value={statusParam ?? ''}
+            onChange={(e) => updateParam('status', e.target.value || null)}
+          >
+            <option value="">Tất cả trạng thái</option>
+            <option value="Paid">Đã thanh toán</option>
+            <option value="Pending">Chờ thanh toán</option>
+            <option value="Failed">Thất bại</option>
+            <option value="Cancelled">Đã hủy</option>
+          </select>
+
+          <select
+            aria-label="Lọc theo gói"
+            className={fieldClass}
+            value={planIdParam ?? ''}
+            onChange={(e) => updateParam('planId', e.target.value || null)}
+          >
+            <option value="">Tất cả gói</option>
+            {plans.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+
+          {(statusParam || planIdParam || keyword) && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setKeyword('')
+                setSearch('')
+                setParams((prev) => {
+                  const next = new URLSearchParams(prev)
+                  next.delete('status')
+                  next.delete('planId')
+                  next.set('page', '1')
+                  return next
+                })
+              }}
+            >
+              Xóa bộ lọc
+            </Button>
           )}
         </div>
-      </div>
 
-      {/* Analytics Footer - Revenue Chart & Subscription Conversion Funnel */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[170px]">
-        {/* Revenue chart (Left) */}
-        <div className="bg-white p-3 rounded-2xl border border-border-premium shadow-premium flex flex-col justify-between h-full">
-          <div>
-            <h3 className="text-[11px] font-bold text-gray-800 uppercase tracking-wider">Tốc độ tăng trưởng doanh thu</h3>
-            <p className="text-[9px] text-gray-400">Doanh thu định kỳ nâng cấp gói theo ngày (VND)</p>
+        {/* Orders Table Body */}
+        {ordersLoading ? (
+          <div role="status" className="p-12 text-center text-muted">
+            Đang tải danh sách đơn hàng…
           </div>
-          <div className="flex-1 min-h-0 w-full mt-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData} margin={{ top: 2, right: 5, left: -25, bottom: -5 }}>
-                <defs>
-                  <linearGradient id="colorRevActive" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#7C5CFF" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#7C5CFF" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 8, fill: '#8E9AA8' }} />
-                <Tooltip contentStyle={{ fontSize: '10px' }} />
-                <Area type="monotone" dataKey="rev" stroke="#7C5CFF" strokeWidth={1.5} fillOpacity={1} fill="url(#colorRevActive)" />
-              </AreaChart>
-            </ResponsiveContainer>
+        ) : currentOrders?.error ? (
+          <div role="alert" className="p-8">
+            <EmptyState
+              icon={<WarningCircle size={20} />}
+              title={currentOrders.error}
+              action={
+                <Button variant="secondary" onClick={refreshAll}>
+                  Thử lại
+                </Button>
+              }
+            />
           </div>
-        </div>
+        ) : (
+          <>
+            <DataTable
+              columns={columns}
+              rows={orders}
+              rowKey={(row) => row.id}
+              empty={
+                <EmptyState
+                  colSpan={columns.length}
+                  title="Không tìm thấy đơn mua gói nào"
+                  description="Hãy thử chọn khoảng thời gian hoặc bộ lọc khác."
+                />
+              }
+            />
 
-        {/* Subscription Conversion Funnel (Right) */}
-        <div className="bg-white p-3.5 rounded-2xl border border-border-premium shadow-premium flex flex-col justify-between h-full">
-          <div>
-            <h3 className="text-[11px] font-bold text-gray-800 uppercase tracking-wider">Phễu chuyển đổi mua gói</h3>
-            <p className="text-[9px] text-gray-400">Các bước từ khi đăng ký ứng dụng đến khi nâng cấp cước thành công</p>
-          </div>
-          
-          <div className="flex items-center justify-between gap-2 mt-2">
-            {[
-              { stage: 'Đăng ký App', rate: '100%', val: '22k thành viên', color: 'bg-primary' },
-              { stage: 'L.Kết Bank', rate: '45.1%', val: '9.9k liên kết', color: 'bg-[#8E79FF]' },
-              { stage: 'Mục tiêu Active', rate: '32.4%', val: '7.1k hoạt động', color: 'bg-[#A695FF]' },
-              { stage: 'Premium Paid', rate: '12.8%', val: '2.8k chuyển đổi', color: 'bg-[#BFB2FF]' },
-            ].map((step, idx) => (
-              <div key={idx} className="flex-1 flex flex-col gap-1 select-none">
-                <div className="h-2 rounded bg-gray-100 overflow-hidden relative">
-                  <div className={`h-full ${step.color}`} style={{ width: step.rate }}></div>
-                </div>
-                <div className="flex flex-col mt-0.5">
-                  <span className="text-[9px] font-bold text-gray-800 truncate leading-none">{step.stage}</span>
-                  <span className="text-[9px] font-mono text-gray-400 mt-1">{step.rate} ({step.val})</span>
-                </div>
+            <div className="p-4 flex flex-wrap items-center justify-between gap-3 border-t border-border-premium text-xs text-muted">
+              <span data-testid="orders-page-info">
+                Trang {page}/{totalPages} · {formatNumber(totalOrders)} đơn hàng
+              </span>
+              <div className="flex items-center gap-2">
+                <select
+                  aria-label="Số đơn mỗi trang"
+                  className={fieldClass}
+                  value={pageSize}
+                  onChange={(e) => updateParam('pageSize', e.target.value)}
+                >
+                  {[20, 50, 100].map((size) => (
+                    <option key={size} value={size}>
+                      {size}/trang
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  variant="secondary"
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  Trang trước
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Trang sau
+                </Button>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
+            </div>
+          </>
+        )}
+      </SectionCard>
     </div>
-  );
-};
-
+  )
+}
